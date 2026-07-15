@@ -68,6 +68,28 @@ RESEND_FROM_EMAIL=CuanHero <no-reply@cuanhero.com>
 The reset link expires after one hour and successfully changing a password
 revokes the user's existing sessions.
 
+## Exness IB account verification
+
+Creating a `FREE_TRIAL` or `IB_MONTHLY` trading account from the admin panel
+requires verification against the Exness Partner Client Accounts report. Add
+these server-only variables:
+
+```env
+EXNESS_PARTNER_EMAIL=partner@example.com
+EXNESS_PARTNER_PASSWORD=your-partner-password
+EXNESS_CLIENT_ACCOUNTS_URL=https://my.exnessaffiliates.com/api/your-client-accounts-endpoint/{accountId}
+EXNESS_PARTNER_CODE=your-partner-code
+IB_VERIFICATION_SECRET=a-long-random-secret
+```
+
+Copy the exact Client Accounts endpoint from the Exness Partnership API schema.
+Use `{accountId}` in the URL when the endpoint accepts the account in its path.
+If it uses a query parameter, omit the placeholder and optionally set
+`EXNESS_ACCOUNT_QUERY_PARAM` (the default is `client_account`).
+`EXNESS_PARTNER_CODE` is optional when the report only returns clients assigned
+to the authenticated partner. The verification token is valid for 15 minutes
+and is checked again by the create-account API.
+
 ## Subscription renewal cron
 
 The renewal cron sends email reminders 7, 3, and 1 day before a subscription

@@ -41,6 +41,7 @@ export const GET = async () => {
       orderBy: [{ orderNumber: "asc" }, { id: "asc" }],
       select: {
         id: true,
+        code: true,
         name: true,
         price: true,
         recurringType: true,

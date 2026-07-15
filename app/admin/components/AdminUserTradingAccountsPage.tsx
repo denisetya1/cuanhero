@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   ArrowLeft,
+  BadgeCheck,
   Braces,
   CalendarIcon,
   Eye,
@@ -19,7 +20,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
@@ -54,6 +55,7 @@ import {
   useManageAdminTradingAccountRuntime,
   useUpdateAdminTradingAccount,
   useUpdateAdminTradingAccountConfig,
+  useVerifyAdminTradingAccountIb,
 } from "@/hooks/useAdminUsers";
 import AdminTablePagination, {
   DEFAULT_TABLE_PAGE_SIZE,
@@ -98,6 +100,7 @@ type UserTradingAccountsResponse = {
 type TradingAccountOptionsResponse = {
   packages: Array<{
     id: number;
+    code?: string | null;
     name: string;
     price?: string | null;
     recurringType?: string | null;
@@ -138,6 +141,20 @@ const statusOptions = [
   { label: "Suspended", value: "2" },
 ];
 
+const ibPackageCodes = new Set(["FREE_TRIAL", "IB_MONTHLY"]);
+
+type IbVerificationState = {
+  status: "idle" | "verified" | "failed";
+  token: string;
+  message: string;
+};
+
+const emptyIbVerification: IbVerificationState = {
+  status: "idle",
+  token: "",
+  message: "",
+};
+
 const numericTextSchema = z
   .string()
   .trim()
@@ -175,7 +192,7 @@ const getTradingAccountDefaultValues = (
   password: "",
   server: tradingServerOptions[0],
   serverId: servers[0] ? String(servers[0].id) : "",
-  packageId: packages[0] ? String(packages[0].id) : "",
+  packageId: "",
   expertAdvisorId: expertAdvisors[0] ? String(expertAdvisors[0].id) : "",
   recurringPrice: "",
   currency: "IDR",
@@ -295,6 +312,7 @@ export default function AdminUserTradingAccountsPage({
 }) {
   const queryClient = useQueryClient();
   const createTradingAccount = useCreateAdminTradingAccount();
+  const verifyTradingAccountIb = useVerifyAdminTradingAccountIb();
   const updateTradingAccount = useUpdateAdminTradingAccount();
   const updateTradingAccountConfig = useUpdateAdminTradingAccountConfig();
   const deleteTradingAccount = useDeleteAdminTradingAccount();
@@ -321,6 +339,8 @@ export default function AdminUserTradingAccountsPage({
   const [configMessage, setConfigMessage] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [message, setMessage] = useState("");
+  const [ibVerification, setIbVerification] =
+    useState<IbVerificationState>(emptyIbVerification);
   const [editMessage, setEditMessage] = useState("");
   const [runtimeAction, setRuntimeAction] = useState<{
     accountId: number;
@@ -347,6 +367,20 @@ export default function AdminUserTradingAccountsPage({
     resolver: zodResolver(tradingAccountSchema),
     defaultValues: getTradingAccountDefaultValues([], [], []),
   });
+  const createPackageId = useWatch({
+    control: createTradingAccountForm.control,
+    name: "packageId",
+  });
+  const selectedCreatePackage = packages.find(
+    (packageItem) => String(packageItem.id) === createPackageId,
+  );
+  const requiresIbVerification = Boolean(
+    selectedCreatePackage?.code &&
+      ibPackageCodes.has(selectedCreatePackage.code.trim().toUpperCase()),
+  );
+  const canContinueCreate =
+    Boolean(selectedCreatePackage) &&
+    (!requiresIbVerification || ibVerification.status === "verified");
   const editTradingAccountForm = useForm<EditTradingAccountFormValues>({
     resolver: zodResolver(editTradingAccountSchema),
     defaultValues: getEditTradingAccountDefaultValues(),
@@ -356,6 +390,7 @@ export default function AdminUserTradingAccountsPage({
     setOpenCreateDialog(open);
 
     if (open) {
+      setIbVerification(emptyIbVerification);
       createTradingAccountForm.reset(
         getTradingAccountDefaultValues(packages, expertAdvisors, servers),
       );
@@ -364,7 +399,56 @@ export default function AdminUserTradingAccountsPage({
 
     if (!open) {
       setMessage("");
+      setIbVerification(emptyIbVerification);
       createTradingAccountForm.reset(getTradingAccountDefaultValues([], [], []));
+    }
+  };
+
+  const resetIbVerification = () => {
+    setIbVerification(emptyIbVerification);
+  };
+
+  const handleVerifyIbAccount = async () => {
+    const accountId = createTradingAccountForm.getValues("accountId").trim();
+    const packageId = Number(createTradingAccountForm.getValues("packageId"));
+
+    if (!accountId) {
+      createTradingAccountForm.setError("accountId", {
+        message: "Account ID is required before verification.",
+      });
+      return;
+    }
+
+    createTradingAccountForm.clearErrors("accountId");
+    setIbVerification(emptyIbVerification);
+
+    try {
+      const response = await verifyTradingAccountIb.mutateAsync({
+        accountId,
+        packageId,
+      });
+      const result = response?.data as
+        | { verificationToken?: string }
+        | undefined;
+
+      if (!result?.verificationToken) {
+        throw new Error("Exness verification did not return a valid token.");
+      }
+
+      setIbVerification({
+        status: "verified",
+        token: result.verificationToken,
+        message: "Verified under the configured Exness IB.",
+      });
+    } catch (error) {
+      setIbVerification({
+        status: "failed",
+        token: "",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to verify this Exness account.",
+      });
     }
   };
 
@@ -512,6 +596,7 @@ export default function AdminUserTradingAccountsPage({
         expertAdvisorId: Number(values.expertAdvisorId),
         recurringPrice: values.recurringPrice.trim(),
         currency: values.currency,
+        ibVerificationToken: ibVerification.token || undefined,
       });
       handleDialogChange(false);
       toast.success("Trading account created successfully.");
@@ -1177,19 +1262,108 @@ export default function AdminUserTradingAccountsPage({
               <div className="space-y-5">
               <label className="block space-y-2.5">
                 <span className="text-sm font-medium text-gray-700">
+                  Package
+                </span>
+                <Controller
+                  control={createTradingAccountForm.control}
+                  name="packageId"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        resetIbVerification();
+                      }}
+                    >
+                      <SelectTrigger className={adminSelectTriggerClass}>
+                        <SelectValue placeholder="Select package first" />
+                      </SelectTrigger>
+                      <SelectContent className={adminSelectContentClass}>
+                        {packages.map((packageItem) => (
+                          <SelectItem
+                            key={packageItem.id}
+                            value={String(packageItem.id)}
+                            className={adminSelectItemClass}
+                          >
+                            {packageItem.name}
+                            {packageItem.price ? ` - ${packageItem.price}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {createTradingAccountForm.formState.errors.packageId && (
+                  <span className="text-xs text-red-600">
+                    {createTradingAccountForm.formState.errors.packageId.message}
+                  </span>
+                )}
+                {requiresIbVerification && (
+                  <span className="block text-xs leading-5 text-amber-700">
+                    This package requires an Exness account registered under
+                    the configured IB.
+                  </span>
+                )}
+              </label>
+
+              {selectedCreatePackage && (
+              <label className="block space-y-2.5">
+                <span className="text-sm font-medium text-gray-700">
                   Account ID
                 </span>
-                <Input
-                  {...createTradingAccountForm.register("accountId")}
-                  placeholder="Enter account ID"
-                  className={adminInputClass}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    {...createTradingAccountForm.register("accountId", {
+                      onChange: resetIbVerification,
+                    })}
+                    inputMode="numeric"
+                    placeholder="Enter Exness account ID"
+                    className={adminInputClass}
+                  />
+                  {requiresIbVerification && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void handleVerifyIbAccount()}
+                      disabled={verifyTradingAccountIb.isPending}
+                      className="shrink-0 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+                    >
+                      {verifyTradingAccountIb.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <BadgeCheck className="h-4 w-4" />
+                      )}
+                      {verifyTradingAccountIb.isPending
+                        ? "Checking..."
+                        : "Verify IB"}
+                    </Button>
+                  )}
+                </div>
                 {createTradingAccountForm.formState.errors.accountId && (
                   <span className="text-xs text-red-600">
                     {createTradingAccountForm.formState.errors.accountId.message}
                   </span>
                 )}
               </label>
+              )}
+
+              {requiresIbVerification && ibVerification.message && (
+                <div
+                  className={`flex items-start gap-2 rounded-md border px-3 py-2.5 text-sm ${
+                    ibVerification.status === "verified"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  {ibVerification.status === "verified" && (
+                    <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                  )}
+                  <span>{ibVerification.message}</span>
+                </div>
+              )}
+
+              {canContinueCreate && (
+              <>
 
               <label className="block space-y-2.5">
                 <span className="text-sm font-medium text-gray-700">
@@ -1275,46 +1449,7 @@ export default function AdminUserTradingAccountsPage({
                 )}
               </label>
 
-              <div className="grid gap-5 sm:grid-cols-2">
-                <label className="block space-y-2.5">
-                  <span className="text-sm font-medium text-gray-700">
-                    Package
-                  </span>
-                  <Controller
-                    control={createTradingAccountForm.control}
-                    name="packageId"
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className={adminSelectTriggerClass}>
-                          <SelectValue placeholder="Select package" />
-                        </SelectTrigger>
-                        <SelectContent className={adminSelectContentClass}>
-                          {packages.map((packageItem) => (
-                            <SelectItem
-                              key={packageItem.id}
-                              value={String(packageItem.id)}
-                              className={adminSelectItemClass}
-                            >
-                              {packageItem.name}
-                              {packageItem.price
-                                ? ` - ${packageItem.price}`
-                                : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  {createTradingAccountForm.formState.errors.packageId && (
-                    <span className="text-xs text-red-600">
-                      {
-                        createTradingAccountForm.formState.errors.packageId
-                          .message
-                      }
-                    </span>
-                  )}
-                </label>
-
+              <div>
                 <label className="block space-y-2.5">
                   <span className="text-sm font-medium text-gray-700">
                     Expert Advisor
@@ -1409,6 +1544,9 @@ export default function AdminUserTradingAccountsPage({
                 </label>
               </div>
 
+              </>
+              )}
+
               </div>
             </div>
 
@@ -1424,6 +1562,7 @@ export default function AdminUserTradingAccountsPage({
                 <Button
                   type="submit"
                   disabled={
+                    !canContinueCreate ||
                     createTradingAccount.isPending ||
                     createTradingAccountForm.formState.isSubmitting
                   }

@@ -1,5 +1,9 @@
 import { auth } from "@/lib/auth";
 import { decryptText, encryptText } from "@/lib/encryption";
+import {
+  IB_VERIFICATION_PACKAGE_CODES,
+  verifyIbVerificationToken,
+} from "@/lib/ib-verification";
 import prisma from "@/lib/prisma";
 import {
   getPySyncBaseUrl,
@@ -173,6 +177,7 @@ export const POST = async (
   const currency = String(body.currency || "")
     .trim()
     .toUpperCase();
+  const ibVerificationToken = String(body.ibVerificationToken || "");
   const allowedCurrencies = ["IDR", "USD", "MYR", "SGD"];
   const recurringPriceNumber = Number(recurringPrice);
 
@@ -246,6 +251,7 @@ export const POST = async (
       },
       select: {
         id: true,
+        code: true,
       },
     }),
     prisma.expertAdvisor.findUnique({
@@ -277,6 +283,25 @@ export const POST = async (
       "INVALID_RELATION",
       "Selected server, package, or Expert Advisor is invalid.",
       [],
+    );
+  }
+
+  const selectedPackageCode = selectedPackage.code?.trim().toUpperCase();
+
+  if (
+    selectedPackageCode &&
+    IB_VERIFICATION_PACKAGE_CODES.has(selectedPackageCode) &&
+    !verifyIbVerificationToken(ibVerificationToken, {
+      accountId,
+      packageId: selectedPackage.id,
+      packageCode: selectedPackageCode,
+    })
+  ) {
+    return buildErrorResponse(
+      "IB_VERIFICATION_REQUIRED",
+      "Verify this Exness account under the configured IB before creating it.",
+      [],
+      403,
     );
   }
 

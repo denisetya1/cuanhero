@@ -24,6 +24,12 @@ export type AdminTradingAccountPayload = {
   expertAdvisorId: number;
   recurringPrice: string;
   currency: string;
+  ibVerificationToken?: string;
+};
+
+export type AdminIbVerificationPayload = {
+  accountId: string;
+  packageId: number;
 };
 
 export type AdminUpdateTradingAccountPayload = Omit<
@@ -91,9 +97,23 @@ export const useCreateAdminTradingAccount = () => {
             expertAdvisorId: payload.expertAdvisorId,
             recurringPrice: payload.recurringPrice,
             currency: payload.currency,
+            ibVerificationToken: payload.ibVerificationToken,
           }),
         },
       ).then(handleRes);
+    },
+  });
+};
+
+export const useVerifyAdminTradingAccountIb = () => {
+  return useMutation({
+    mutationKey: ["verify-admin-trading-account-ib"],
+    mutationFn: async (payload: AdminIbVerificationPayload) => {
+      return fetch("/api/admin/trading-accounts/verify-ib", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).then(handleRes);
     },
   });
 };
