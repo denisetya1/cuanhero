@@ -1,0 +1,6 @@
+chmod +x /root/pySync/install-vps.sh
+
+PYSYNC_API_KEY='12d7b00a47a72ddd985586f3379cf0ef33cc14e5394cfc50eff74f7930d1af09' \
+PYSYNC_REGISTRATION_KEY='e58b66ae305b2e1babcebbbf4cbb43314da242847e63ca50b9497d69de0e9000' \
+ENABLE_UFW=1 \
+/root/pySync/install-vps.sh

@@ -1,0 +1,233 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  Loader2,
+  RefreshCw,
+  Search,
+  Stethoscope,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+import { toast } from "react-toastify";
+import { Input } from "@/components/ui/input";
+import { useGetAdminTradingAccounts } from "@/hooks/useAdminTradingAccounts";
+import { useManageAdminTradingAccountRuntime } from "@/hooks/useAdminUsers";
+import AdminTablePagination, { DEFAULT_TABLE_PAGE_SIZE } from "./AdminTablePagination";
+
+type TradingAccount = {
+  id: number;
+  accountId: string;
+  accountName?: string | null;
+  accountServer?: string | null;
+  status: number;
+  eaStatus: number;
+  lastSync?: string | null;
+  endDate?: string | null;
+  user: { id: string; name: string; email: string };
+  server?: { name: string } | null;
+  package?: { name: string } | null;
+  expertAdvisor?: { name: string } | null;
+};
+
+type Health = "online" | "warning" | "offline" | "inactive";
+const WARNING_AFTER_MS = 5 * 60 * 1000;
+const OFFLINE_AFTER_MS = 15 * 60 * 1000;
+
+const getHealth = (account: TradingAccount, now: number): Health => {
+  if (account.status !== 1) return "inactive";
+  if (!account.lastSync) return "offline";
+  const age = now - new Date(account.lastSync).getTime();
+  if (age > OFFLINE_AFTER_MS) return "offline";
+  if (age > WARNING_AFTER_MS) return "warning";
+  return "online";
+};
+
+const healthMeta = {
+  online: { label: "Online", className: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: Wifi },
+  warning: { label: "Delayed", className: "border-amber-200 bg-amber-50 text-amber-700", icon: AlertTriangle },
+  offline: { label: "Offline", className: "border-red-200 bg-red-50 text-red-700", icon: WifiOff },
+  inactive: { label: "Inactive", className: "border-slate-200 bg-slate-100 text-slate-600", icon: Activity },
+} as const;
+
+const formatLastSync = (value?: string | null) => {
+  if (!value) return "Never synced";
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(new Date(value));
+};
+
+export default function AdminTradingAccountsPage() {
+  const { data, isLoading, isError, error, isFetching, refetch, dataUpdatedAt } =
+    useGetAdminTradingAccounts();
+  const checkTradingAccountHealth = useManageAdminTradingAccountRuntime();
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | Health>("all");
+  const [page, setPage] = useState(1);
+  const [checkingAccountId, setCheckingAccountId] = useState<number | null>(
+    null,
+  );
+  const [mountedAt] = useState(() => Date.now());
+  const accounts = useMemo(
+    () => (data?.data || []) as TradingAccount[],
+    [data?.data],
+  );
+  const now = dataUpdatedAt || mountedAt;
+
+  const counts = useMemo(
+    () =>
+      accounts.reduce(
+        (result, account) => {
+          result[getHealth(account, now)] += 1;
+          return result;
+        },
+        { online: 0, warning: 0, offline: 0, inactive: 0 } as Record<
+          Health,
+          number
+        >,
+      ),
+    [accounts, now],
+  );
+
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return accounts.filter((account) => {
+      const matchesHealth = filter === "all" || getHealth(account, now) === filter;
+      const matchesSearch = !needle || [account.accountId, account.accountName, account.user.name, account.user.email, account.server?.name]
+        .some((value) => value?.toLowerCase().includes(needle));
+      return matchesHealth && matchesSearch;
+    });
+  }, [accounts, filter, now, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / DEFAULT_TABLE_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visible = filtered.slice((safePage - 1) * DEFAULT_TABLE_PAGE_SIZE, safePage * DEFAULT_TABLE_PAGE_SIZE);
+
+  const filters: Array<{ key: "all" | Health; label: string; count: number }> = [
+    { key: "all", label: "All", count: accounts.length },
+    { key: "offline", label: "Offline", count: counts.offline },
+    { key: "warning", label: "Delayed", count: counts.warning },
+    { key: "online", label: "Online", count: counts.online },
+    { key: "inactive", label: "Inactive", count: counts.inactive },
+  ];
+
+  const handleCheckHealth = async (account: TradingAccount) => {
+    setCheckingAccountId(account.id);
+
+    try {
+      const response = await checkTradingAccountHealth.mutateAsync({
+        userId: account.user.id,
+        tradingAccountId: account.id,
+        action: "health",
+      });
+      const runtime = response?.data?.runtime;
+      const bot =
+        runtime?.bot && typeof runtime.bot === "object" ? runtime.bot : null;
+      const runtimeStatus =
+        bot && "status" in bot && typeof bot.status === "string"
+          ? bot.status
+          : "unknown";
+
+      toast.success(
+        `${account.accountId}: runtime status ${runtimeStatus}.`,
+      );
+      await refetch();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Healthcheck ${account.accountId} gagal.`,
+      );
+    } finally {
+      setCheckingAccountId(null);
+    }
+  };
+
+  return (
+    <div className="min-h-screen space-y-6 bg-slate-50/50 p-2">
+      <section className="rounded-md border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-blue-600"><Activity className="h-4 w-4" /><span className="text-xs font-semibold uppercase tracking-wider">Service monitor</span></div>
+            <h1 className="mt-1 text-xl font-bold text-gray-900">Trading Accounts</h1>
+            <p className="mt-1 text-sm text-gray-500">Heartbeat delayed after 5 minutes and offline after 15 minutes.</p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Auto refresh 30s
+            </div>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="inline-flex h-8 items-center gap-2 rounded-md border border-blue-600 bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`}
+              />
+              Refresh Healthcheck
+            </button>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {(["offline", "warning", "online", "inactive"] as Health[]).map((health) => {
+            const meta = healthMeta[health];
+            const Icon = meta.icon;
+            return <button key={health} onClick={() => { setFilter(health); setPage(1); }} className={`flex items-center justify-between rounded-lg border p-4 text-left ${meta.className}`}><div><p className="text-xs font-semibold uppercase">{meta.label}</p><p className="mt-1 text-2xl font-bold">{counts[health]}</p></div><Icon className="h-6 w-6" /></button>;
+          })}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-md border border-gray-100 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+          <div className="relative w-full sm:w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search account, user, or server..." className="pl-9" /></div>
+          <div className="flex flex-wrap gap-2">{filters.map((item) => <button key={item.key} onClick={() => { setFilter(item.key); setPage(1); }} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${filter === item.key ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>{item.label} ({item.count})</button>)}</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Account</th><th className="px-5 py-3">Owner</th><th className="px-5 py-3">Server / EA</th><th className="px-5 py-3">Heartbeat</th><th className="px-5 py-3">Service</th><th className="px-5 py-3">Action</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? <tr><td colSpan={6} className="px-5 py-12 text-center text-slate-400">Loading trading accounts...</td></tr>
+                : isError ? <tr><td colSpan={6} className="px-5 py-12 text-center text-red-600">{error instanceof Error ? error.message : "Failed to load trading accounts."}</td></tr>
+                : visible.length === 0 ? <tr><td colSpan={6} className="px-5 py-12 text-center text-slate-400">No matching trading accounts.</td></tr>
+                : visible.map((account) => {
+                  const health = getHealth(account, now); const meta = healthMeta[health]; const Icon = meta.icon;
+                  return <tr key={account.id} className={health === "offline" ? "bg-red-50/40" : "hover:bg-slate-50/60"}>
+                    <td className="px-5 py-4"><p className="font-semibold text-slate-900">{account.accountName || account.accountId}</p><p className="text-xs text-slate-500">{account.accountId} · {account.accountServer || "-"}</p></td>
+                    <td className="px-5 py-4"><p className="font-medium text-slate-800">{account.user.name}</p><p className="text-xs text-slate-500">{account.user.email}</p></td>
+                    <td className="px-5 py-4"><p className="text-slate-700">{account.server?.name || "-"}</p><p className="text-xs text-slate-500">{account.expertAdvisor?.name || "No EA"} · {account.package?.name || "No package"}</p></td>
+                    <td className="whitespace-nowrap px-5 py-4"><p className="text-slate-700">{formatLastSync(account.lastSync)}</p><p className="text-xs text-slate-400">EA status: {account.eaStatus}</p></td>
+                    <td className="px-5 py-4"><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${meta.className}`}><Icon className="h-3.5 w-3.5" />{meta.label}</span></td>
+                    <td className="px-5 py-4">
+                      <div className="flex min-w-40 flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleCheckHealth(account)}
+                          disabled={checkingAccountId !== null}
+                          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {checkingAccountId === account.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Stethoscope className="h-3.5 w-3.5" />
+                          )}
+                          Check Health
+                        </button>
+                        <Link href={`/admin/users/${account.user.id}/trading-accounts`} className="text-xs font-semibold text-blue-600 hover:text-blue-800">View account</Link>
+                      </div>
+                    </td>
+                  </tr>;
+                })}
+            </tbody>
+          </table>
+        </div>
+        <AdminTablePagination currentPage={safePage} totalItems={filtered.length} onPageChange={setPage} />
+      </section>
+    </div>
+  );
+}

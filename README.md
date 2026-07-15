@@ -34,3 +34,57 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## pySync server registration
+
+The main application automatically creates a proxied Cloudflare DNS record
+when a new pySync VPS registers. Configure these server-only environment
+variables:
+
+```env
+PYSYNC_REGISTRATION_KEY=shared-registration-secret
+CLOUDFLARE_API_TOKEN=cloudflare-token-with-dns-edit
+CLOUDFLARE_ZONE_ID=cloudflare-zone-id
+CLOUDFLARE_ZONE_NAME=cuanhero.com
+PYSYNC_SUBDOMAIN_PREFIX=mt5-vps
+```
+
+The Cloudflare token only needs `Zone / DNS / Edit` access for the
+`cuanhero.com` zone. A server with database ID `12`, for example, receives
+`mt5-vps-12.cuanhero.com`. The `servers.ip_address` field keeps the original
+public IP while `servers.domain` keeps the proxied hostname.
+
+## Password reset email
+
+Password reset links are delivered through Resend. Verify the sending domain
+in Resend, then configure these server-only environment variables:
+
+```env
+BETTER_AUTH_URL=https://cuanhero.com
+RESEND_API_KEY=re_your_api_key
+RESEND_FROM_EMAIL=CuanHero <no-reply@cuanhero.com>
+```
+
+The reset link expires after one hour and successfully changing a password
+revokes the user's existing sessions.
+
+## Subscription renewal cron
+
+The renewal cron sends email reminders 7, 3, and 1 day before a subscription
+ends, and once more on its end date. Configure a private cron token and,
+optionally, customize the reminder days:
+
+```env
+CRON_SECRET=your-random-cron-secret
+RENEWAL_REMINDER_DAYS=7,3,1,0
+```
+
+Call the endpoint once per day using Jakarta time:
+
+```bash
+curl -X POST https://cuanhero.com/api/cron/subscription-renewals \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Each successful reminder is recorded, so retrying the endpoint does not send
+the same reminder twice for the same trading account and end date.
