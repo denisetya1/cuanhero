@@ -112,8 +112,10 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
   ).replace(/\/$/, "");
   const email = getRequiredEnv("EXNESS_PARTNER_EMAIL");
   const password = getRequiredEnv("EXNESS_PARTNER_PASSWORD");
+  const authUrl =
+    process.env.EXNESS_AUTH_URL?.trim() || `${apiBaseUrl}/api/auth/`;
 
-  const authResponse = await fetch(`${apiBaseUrl}/api/auth`, {
+  const authResponse = await fetch(authUrl, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -122,6 +124,8 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
     body: JSON.stringify({ email, password }),
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),
+    // A redirect can turn POST into GET and surface as a misleading HTTP 405.
+    redirect: "manual",
   });
   const authBody = await readJson(authResponse);
   const authRecord = asRecord(authBody);
@@ -130,6 +134,12 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
     [authRecord.token, authRecord.access, authRecord.access_token].find(
       (value): value is string => typeof value === "string" && Boolean(value),
     );
+
+  if (authResponse.status >= 300 && authResponse.status < 400) {
+    throw new Error(
+      `Exness auth URL redirected to ${authResponse.headers.get("location") || "another URL"}. Configure EXNESS_AUTH_URL with the final endpoint.`,
+    );
+  }
 
   if (!authResponse.ok || !token) {
     throw new Error(

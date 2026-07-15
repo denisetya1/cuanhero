@@ -77,6 +77,7 @@ these server-only variables:
 ```env
 EXNESS_PARTNER_EMAIL=partner@example.com
 EXNESS_PARTNER_PASSWORD=your-partner-password
+EXNESS_AUTH_URL=https://my.exnessaffiliates.com/api/auth/
 EXNESS_CLIENT_ACCOUNTS_URL=https://my.exnessaffiliates.com/api/your-client-accounts-endpoint/{accountId}
 EXNESS_PARTNER_CODE=your-partner-code
 IB_VERIFICATION_SECRET=a-long-random-secret
