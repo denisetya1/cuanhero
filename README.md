@@ -88,3 +88,19 @@ curl -X POST https://cuanhero.com/api/cron/subscription-renewals \
 
 Each successful reminder is recorded, so retrying the endpoint does not send
 the same reminder twice for the same trading account and end date.
+
+## Subscription expiration cron
+
+The expiration cron disables subscriptions after their full `endDate` has
+passed, terminates deployed pySync instances, and marks both the account and EA
+runtime as terminated. It uses the same `CRON_SECRET` as the renewal cron.
+
+Call it once per day shortly after midnight in Jakarta:
+
+```bash
+curl -X POST https://cuanhero.com/api/cron/subscription-expirations \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+If pySync cannot be reached, member access is still disabled immediately and
+the runtime cleanup is retried on the next cron run.

@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { handleRes } from "@/lib/response";
 
 export type AdminPackagePayload = {
+  code?: string | null;
   name: string;
   description?: Record<string, string> | null;
   features?: unknown;

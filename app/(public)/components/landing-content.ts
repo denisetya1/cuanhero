@@ -5,7 +5,7 @@ export const landingContent = {
     nav: {
       home: "Beranda",
       feature: "Fitur",
-      package: "Paket",
+      package: "Pricing",
       howTo: "Cara Kerja",
       testimony: "Testimoni",
       faq: "FAQ",

@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CreditCard,
+  FileText,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -46,6 +47,7 @@ const menu = [
   { label: "Packages", href: "/admin/packages", icon: Package },
   { label: "EA Robot", href: "/admin/ea", icon: Bot },
   { label: "Server", href: "/admin/server", icon: Server },
+  { label: "Pages", href: "/admin/pages", icon: FileText },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

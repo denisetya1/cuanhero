@@ -26,12 +26,15 @@ const tradingAccountSelect = {
   endDate: true,
   package: {
     select: {
+      code: true,
       name: true,
+      recurringType: true,
     },
   },
   expertAdvisor: {
     select: {
       name: true,
+      defaultConfig: true,
     },
   },
 };

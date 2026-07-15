@@ -38,6 +38,7 @@ import { getLocalizedText } from "@/lib/localized-text";
 
 type PackageItem = {
   id: number;
+  code?: string | null;
   name: string;
   description?: Record<string, string> | string | null;
   features?: unknown;
@@ -70,6 +71,13 @@ const adminSelectItemClass =
 const recurringTypeOptions = ["24h", "30d", "lifetime"];
 
 const packageSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || /^[A-Za-z0-9_]+$/.test(value), {
+      message: "Code may only contain letters, numbers, and underscores.",
+    }),
   name: z.string().trim().min(1, "Package name is required."),
   description: z
     .string()
@@ -142,6 +150,7 @@ const packageSchema = z.object({
 type PackageFormValues = z.infer<typeof packageSchema>;
 
 const packageDefaultValues: PackageFormValues = {
+  code: "",
   name: "",
   description: "",
   price: "",
@@ -232,6 +241,7 @@ export default function AdminPackagesPage() {
     const keyword = search.toLowerCase();
 
     return (
+      (packageItem.code || "").toLowerCase().includes(keyword) ||
       packageItem.name.toLowerCase().includes(keyword) ||
       getLocalizedText(packageItem.description, "en")
         .toLowerCase()
@@ -272,6 +282,7 @@ export default function AdminPackagesPage() {
     setSelectedPackage(packageItem);
     setFormMessage("");
     editPackageForm.reset({
+      code: packageItem.code || "",
       name: packageItem.name,
       description: stringifyDescription(packageItem.description),
       price: packageItem.price,
@@ -316,6 +327,7 @@ export default function AdminPackagesPage() {
     setFormMessage("");
 
     const payload: AdminPackagePayload = {
+      code: values.code?.trim().toUpperCase() || null,
       name: values.name.trim(),
       description: parseDescription(values.description),
       price: values.price.trim(),
@@ -354,6 +366,7 @@ export default function AdminPackagesPage() {
     try {
       await updatePackage.mutateAsync({
         packageId: selectedPackage.id,
+        code: values.code?.trim().toUpperCase() || null,
         name: values.name.trim(),
         description: parseDescription(values.description),
         price: values.price.trim(),
@@ -419,6 +432,23 @@ export default function AdminPackagesPage() {
         {form.formState.errors.orderNumber && (
           <span className="text-xs text-red-600">
             {form.formState.errors.orderNumber.message}
+          </span>
+        )}
+      </label>
+
+      <label className="block space-y-2.5">
+        <span className="text-sm font-medium text-gray-700">Code</span>
+        <Input
+          {...form.register("code")}
+          placeholder="FREE_TRIAL or IB_MONTHLY"
+          className={`${adminInputClass} font-mono uppercase`}
+        />
+        <span className="block text-xs text-gray-400">
+          Stable identifier used by member flows. Leave empty for regular packages.
+        </span>
+        {form.formState.errors.code && (
+          <span className="text-xs text-red-600">
+            {form.formState.errors.code.message}
           </span>
         )}
       </label>
@@ -635,6 +665,11 @@ export default function AdminPackagesPage() {
                       <p className="text-xs text-gray-400">
                         Package #{packageItem.id}
                       </p>
+                      {packageItem.code && (
+                        <p className="mt-1 font-mono text-[11px] font-semibold text-blue-600">
+                          {packageItem.code}
+                        </p>
+                      )}
                       {getLocalizedText(packageItem.description, "id") && (
                         <p className="mt-1 max-w-sm text-xs text-gray-500">
                           {getLocalizedText(packageItem.description, "id")}

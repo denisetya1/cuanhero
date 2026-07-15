@@ -9,6 +9,8 @@ export type AdminSettingsPayload = {
   metaDescriptionId: string;
   orderMessageEn: string;
   orderMessageId: string;
+  freeTrialMessageEn: string;
+  freeTrialMessageId: string;
   renewalMessageEn: string;
   renewalMessageId: string;
   consultationMessageEn: string;

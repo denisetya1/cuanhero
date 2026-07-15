@@ -12,6 +12,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 
 const packageSelect = {
   id: true,
+  code: true,
   name: true,
   description: true,
   features: true,
@@ -75,6 +76,7 @@ export const PATCH = async (
   const { packageId } = await params;
   const id = Number(packageId);
   const body = await req.json();
+  const code = String(body.code || "").trim().toUpperCase() || null;
   const name = String(body.name || "").trim();
   const description = localizedTextToJson(body.description);
   const price = String(body.price || "").trim();
@@ -90,6 +92,14 @@ export const PATCH = async (
     return buildErrorResponse(
       "VALIDATION_ERROR",
       "Name, price, and recurring type are required.",
+      [],
+    );
+  }
+
+  if (code && !/^[A-Z0-9_]+$/.test(code)) {
+    return buildErrorResponse(
+      "VALIDATION_ERROR",
+      "Package code may only contain uppercase letters, numbers, and underscores.",
       [],
     );
   }
@@ -137,13 +147,15 @@ export const PATCH = async (
     }),
     prisma.package.findFirst({
       where: {
-        name,
+        OR: [{ name }, ...(code ? [{ code }] : [])],
         NOT: {
           id,
         },
       },
       select: {
         id: true,
+        code: true,
+        name: true,
       },
     }),
   ]);
@@ -160,7 +172,9 @@ export const PATCH = async (
   if (duplicatePackage) {
     return buildErrorResponse(
       "PACKAGE_EXISTS",
-      "Package name is already in use.",
+      duplicatePackage.code === code && code
+        ? "Package code is already in use."
+        : "Package name is already in use.",
       [],
       409,
     );
@@ -172,6 +186,7 @@ export const PATCH = async (
         id,
       },
       data: {
+        code,
         name,
         description: description ?? Prisma.DbNull,
         features,

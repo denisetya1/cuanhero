@@ -18,7 +18,12 @@ const Header = () => {
   const lang: LandingLang =
     pathname === "/en" || pathname.startsWith("/en/") ? "en" : "id";
   const content = landingContent[lang].nav;
-  const languageHref = lang === "en" ? "/" : "/en";
+  const languageHref =
+    lang === "en"
+      ? pathname.replace(/^\/en(?=\/|$)/, "") || "/"
+      : pathname === "/"
+        ? "/en"
+        : `/en${pathname}`;
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-ch-bg/80 backdrop-blur-xl">

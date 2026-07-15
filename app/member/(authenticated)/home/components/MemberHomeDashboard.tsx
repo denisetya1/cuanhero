@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ShieldAlert } from "lucide-react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  ChevronDown,
+  MessageCircle,
+  RotateCcw,
+  ShieldAlert,
+} from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -22,6 +28,7 @@ import {
 import { useGetTradingAccounts } from "@/hooks/useTradingAccounts";
 import { handleRes } from "@/lib/response";
 import { TradingAccountStore } from "@/stores/traddingAccount";
+import { useMemberLanguage } from "@/app/member/components/MemberLanguageProvider";
 
 type EAConfiguration = {
   EnableBot: boolean;
@@ -29,7 +36,7 @@ type EAConfiguration = {
   LayerDistancePoint: string;
   UseTrailingTP: boolean;
   TrailingTPStartPoint: string;
-  TrailingDistancePoint: string;
+  TrailingStepPoint: string;
   StopLossUSD: string;
   DailyProfitTargetUSD: string;
   RSIPeriod: string;
@@ -69,10 +76,13 @@ type TradingAccount = {
   lastSync?: string | Date | null;
   endDate?: string | Date | null;
   package?: {
+    code?: string | null;
     name?: string | null;
+    recurringType?: string | null;
   } | null;
   expertAdvisor?: {
     name?: string | null;
+    defaultConfig?: StoredEAConfiguration | null;
   } | null;
 };
 
@@ -86,13 +96,6 @@ const inputClass =
 
 const fieldPanelClass =
   "rounded-xl border border-cyan-400/20 bg-black/25 p-4 shadow-inner shadow-black/30";
-
-const getStatusText = (status?: number) => {
-  if (status === 1) return "Active";
-  if (status === 2) return "Pending";
-  if (status === 3) return "Suspended";
-  return "Not active";
-};
 
 const getBotStatus = (status?: number) => {
   if (status === 1) {
@@ -153,17 +156,33 @@ const formatDate = (value?: string | Date | null) => {
   }).format(new Date(value));
 };
 
-const formatDateOnly = (value?: string | Date | null) => {
+const formatDateOnly = (
+  value?: string | Date | null,
+  locale: "en-US" | "id-ID" = "en-US",
+) => {
   if (!value) return "-";
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
   }).format(new Date(value));
 };
 
-const shiftTimeByHours = (value: string, offsetHours: number) => {
+const getDaysUntilDate = (value?: string | Date | null) => {
+  if (!value) return null;
+
+  const endDate = new Date(value);
+  if (Number.isNaN(endDate.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+
+  return Math.ceil((endDate.getTime() - today.getTime()) / 86_400_000);
+};
+
+const shiftTimeByMinutes = (value: string, offsetMinutes: number) => {
   const match = value.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!match) return value;
 
@@ -172,21 +191,67 @@ const shiftTimeByHours = (value: string, offsetHours: number) => {
   const seconds = Number(match[3] ?? "0");
   if (hours > 23 || minutes > 59 || seconds > 59) return value;
 
-  const shiftedHours = (hours + offsetHours + 24) % 24;
-  return `${String(shiftedHours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  const minutesPerDay = 24 * 60;
+  const totalMinutes = hours * 60 + minutes + offsetMinutes;
+  const shiftedMinutes =
+    ((totalMinutes % minutesPerDay) + minutesPerDay) % minutesPerDay;
+  const shiftedHours = Math.floor(shiftedMinutes / 60);
+  const shiftedMinute = shiftedMinutes % 60;
+
+  return `${String(shiftedHours).padStart(2, "0")}:${String(shiftedMinute).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
-const utcToGmt7 = (value: string) => shiftTimeByHours(value, 7);
-const gmt7ToUtc = (value: string) => shiftTimeByHours(value, -7);
+const subscribeToTimeZone = () => () => undefined;
+const getBrowserTimeZone = () =>
+  Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+const getServerTimeZone = () => "Asia/Jakarta";
 
-const parseConfig = (value?: StoredEAConfiguration | null) => {
+const getTimeZoneOffsetMinutes = (timeZone: string) => {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  const timeInZoneAsUtc = Date.UTC(
+    getPart("year"),
+    getPart("month") - 1,
+    getPart("day"),
+    getPart("hour"),
+    getPart("minute"),
+    getPart("second"),
+  );
+
+  return Math.round((timeInZoneAsUtc - now.getTime()) / 60_000);
+};
+
+const formatUtcOffset = (offsetMinutes: number) => {
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absoluteMinutes = Math.abs(offsetMinutes);
+  const hours = Math.floor(absoluteMinutes / 60);
+  const minutes = absoluteMinutes % 60;
+
+  return `UTC${sign}${hours}${minutes ? `:${String(minutes).padStart(2, "0")}` : ""}`;
+};
+
+const parseConfig = (
+  value?: StoredEAConfiguration | null,
+  timeZoneOffsetMinutes = 7 * 60,
+) => {
   const defaultConfig: EAConfiguration = {
     EnableBot: false,
     StartLot: "0.01",
     LayerDistancePoint: "250",
     UseTrailingTP: false,
     TrailingTPStartPoint: "1500",
-    TrailingDistancePoint: "50",
+    TrailingStepPoint: "50",
     StopLossUSD: "0",
     DailyProfitTargetUSD: "0",
     RSIPeriod: "3",
@@ -241,8 +306,22 @@ const parseConfig = (value?: StoredEAConfiguration | null) => {
     return defaultConfig[key] as boolean;
   };
   const readScheduleTime = (key: keyof EAConfiguration, legacy?: unknown) => {
-    const storedTime = readString(key, legacy);
-    return usesUtcSchedule ? utcToGmt7(storedTime) : storedTime;
+    const current = value[key];
+
+    // The current flat schedule fields are stored in UTC. Convert them to the
+    // timezone detected from the member's browser before populating the form.
+    if (typeof current === "string" || typeof current === "number") {
+      return shiftTimeByMinutes(String(current), timeZoneOffsetMinutes);
+    }
+
+    if (typeof legacy === "string" || typeof legacy === "number") {
+      const legacyTime = String(legacy);
+      return usesUtcSchedule
+        ? shiftTimeByMinutes(legacyTime, timeZoneOffsetMinutes)
+        : legacyTime;
+    }
+
+    return defaultConfig[key] as string;
   };
 
   return {
@@ -254,9 +333,9 @@ const parseConfig = (value?: StoredEAConfiguration | null) => {
       "TrailingTPStartPoint",
       value.tpTrailingStartPoint,
     ),
-    TrailingDistancePoint: readString(
-      "TrailingDistancePoint",
-      value.trailingDistancePoint,
+    TrailingStepPoint: readString(
+      "TrailingStepPoint",
+      value.TrailingDistancePoint ?? value.trailingDistancePoint,
     ),
     StopLossUSD: readString("StopLossUSD", value.autoCutLossUsc),
     DailyProfitTargetUSD: readString(
@@ -303,6 +382,12 @@ const requiredNumber = (label: string) =>
       `${label} must be a number.`,
     );
 
+const positiveNumber = (label: string) =>
+  requiredNumber(label).refine(
+    (value) => Number(value) > 0,
+    `${label} must be greater than zero.`,
+  );
+
 const normalizeTime = (value: string) =>
   /^\d{2}:\d{2}$/.test(value) ? `${value}:00` : value;
 
@@ -312,7 +397,7 @@ const memberConfigSchema = z.object({
   LayerDistancePoint: requiredNumber("Layer Distance Point"),
   UseTrailingTP: z.boolean(),
   TrailingTPStartPoint: requiredNumber("Trailing TP Start Point"),
-  TrailingDistancePoint: requiredNumber("Trailing Distance Point"),
+  TrailingStepPoint: positiveNumber("Trailing Step Point"),
   StopLossUSD: requiredNumber("Stop Loss USD"),
   DailyProfitTargetUSD: requiredNumber("Daily Profit Target USD"),
   RSIPeriod: requiredNumber("RSI Period"),
@@ -351,17 +436,23 @@ const configFieldMeta: Record<
     disabled?: boolean;
   }
 > = {
-  EnableBot: { label: "Enable Bot", type: "switch" },
+  EnableBot: { label: "Enable Auto Trade", type: "switch" },
   StartLot: { label: "Start Lot", type: "number", step: "0.01" },
-  LayerDistancePoint: { label: "Layer Distance Pt.", type: "number" },
+  LayerDistancePoint: {
+    label: "Layer Distance",
+    type: "number",
+    suffix: "Point",
+  },
   UseTrailingTP: { label: "Use Trailing TP", type: "switch" },
   TrailingTPStartPoint: {
-    label: "Trailing TP Start Pt.",
+    label: "Trailing TP Start",
     type: "number",
+    suffix: "Point",
   },
-  TrailingDistancePoint: {
-    label: "Trailing Distance Pt.",
+  TrailingStepPoint: {
+    label: "Trailing Step",
     type: "number",
+    suffix: "Point",
   },
   StopLossUSD: {
     label: "Stop Loss",
@@ -378,18 +469,16 @@ const configFieldMeta: Record<
   RSIPeriod: { label: "RSI Period", type: "number" },
   Oversold: { label: "Oversold", type: "number", step: "0.01" },
   Overbought: { label: "Overbought", type: "number", step: "0.01" },
-  StartTime: { label: "Start Time", type: "time", suffix: "GMT+7" },
-  EndTime: { label: "End Time", type: "time", suffix: "GMT+7" },
-  EnablePauseTime: { label: "Enable Pause Time", type: "switch" },
+  StartTime: { label: "Trading Start Time", type: "time" },
+  EndTime: { label: "Trading End Time", type: "time" },
+  EnablePauseTime: { label: "Enable Schedule Pause", type: "switch" },
   PauseStartTime: {
     label: "Pause Start Time",
     type: "time",
-    suffix: "GMT+7",
   },
   PauseEndTime: {
     label: "Pause End Time",
     type: "time",
-    suffix: "GMT+7",
   },
   LayersPerBatch: { label: "Layers Per Batch", type: "number" },
   MaxLayerCount: { label: "Max Layer Count", type: "number" },
@@ -401,6 +490,7 @@ const configFieldMeta: Record<
   RestMinutesAfterCutLoss: {
     label: "Rest Minutes After Cut Loss",
     type: "number",
+    suffix: "minutes",
   },
   EnableBuy: { label: "Enable Buy", type: "switch" },
   EnableSell: { label: "Enable Sell", type: "switch" },
@@ -425,20 +515,20 @@ const coreConfigRows: ConfigFieldName[][] = [
   ["StartLot", "LayerDistancePoint"],
   ["RSIPeriod"],
   ["Oversold", "Overbought"],
+  ["UseTrailingTP"],
+  ["TrailingTPStartPoint", "TrailingStepPoint"],
+];
+
+const basicConfigRows: ConfigFieldName[][] = [
+  ["EnableBuy"],
+  ["EnableSell"],
   ["StartTime"],
   ["EndTime"],
   ["EnablePauseTime"],
   ["PauseStartTime"],
   ["PauseEndTime"],
-];
-
-const basicConfigRows: ConfigFieldName[][] = [
-  ["UseTrailingTP"],
-  ["TrailingTPStartPoint", "TrailingDistancePoint"],
   ["StopLossUSD", "DailyProfitTargetUSD"],
   ["RestMinutesAfterCutLoss"],
-  ["EnableBuy"],
-  ["EnableSell"],
 ];
 
 const advancedConfigRows: ConfigFieldName[][] = [
@@ -457,37 +547,150 @@ const getMemberConfigDefaultValues = (
   ...config,
 });
 
-export default function MemberHomeDashboard() {
+export default function MemberHomeDashboard({
+  whatsappNumber,
+  renewalMessageEn,
+  renewalMessageId,
+}: {
+  whatsappNumber: string;
+  renewalMessageEn: string;
+  renewalMessageId: string;
+}) {
+  const { language } = useMemberLanguage();
+  const detectedTimeZone = useSyncExternalStore(
+    subscribeToTimeZone,
+    getBrowserTimeZone,
+    getServerTimeZone,
+  );
+  const timeZoneOffsetMinutes = useMemo(
+    () => getTimeZoneOffsetMinutes(detectedTimeZone),
+    [detectedTimeZone],
+  );
+  const utcOffsetLabel = formatUtcOffset(timeZoneOffsetMinutes);
   const { data, isLoading } = useGetTradingAccounts();
   const { tradingAccount, setTradingAccount } = TradingAccountStore();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+  const accountQuery = searchParams.get("account");
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [isConfigDirty, setIsConfigDirty] = useState(false);
   const tradingAccounts: TradingAccount[] = useMemo(
-    () => data?.data || [],
+    () =>
+      ((data?.data || []) as TradingAccount[]).filter(
+        (account) => account.status === 1,
+      ),
     [data?.data],
   );
 
   const selectedAccount = useMemo(() => {
     return (
+      tradingAccounts.find((account) => account.accountId === accountQuery) ||
       tradingAccounts.find((account) => account.id === tradingAccount?.id) ||
       tradingAccounts[0] ||
       null
     );
-  }, [tradingAccount?.id, tradingAccounts]);
+  }, [accountQuery, tradingAccount?.id, tradingAccounts]);
+
+  const isFreeTrial =
+    selectedAccount?.package?.code === "FREE_TRIAL" ||
+    selectedAccount?.package?.recurringType === "24h";
+
+  const renewalHref = useMemo(() => {
+    const number = whatsappNumber.replace(/\D/g, "");
+    if (!number || !selectedAccount) return null;
+
+    const isIndonesian = language === "id";
+    if (isFreeTrial) {
+      const message = [
+        isIndonesian
+          ? "Halo CuanHero, saya ingin melanjutkan Free Trial ke paket IB Monthly."
+          : "Hello CuanHero, I would like to continue my Free Trial with the IB Monthly package.",
+        "",
+        isIndonesian
+          ? `Akun trading: ${selectedAccount.accountId}`
+          : `Trading account: ${selectedAccount.accountId}`,
+        isIndonesian
+          ? `Paket saat ini: ${selectedAccount.package?.name || "Free Trial"}`
+          : `Current package: ${selectedAccount.package?.name || "Free Trial"}`,
+        isIndonesian
+          ? `Trial berakhir: ${formatDateOnly(selectedAccount.endDate, "id-ID")}`
+          : `Trial ends: ${formatDateOnly(selectedAccount.endDate)}`,
+        "",
+        isIndonesian
+          ? "Mohon bantu proses pendaftaran dan verifikasi akun IB saya."
+          : "Please help me register and verify my IB account.",
+      ].join("\n");
+
+      return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+    }
+
+    const renewalMessage = isIndonesian
+      ? renewalMessageId.trim() || renewalMessageEn.trim()
+      : renewalMessageEn.trim();
+
+    const message = [
+      renewalMessage ||
+        (isIndonesian
+          ? "Halo CuanHero, saya ingin memperpanjang langganan saya."
+          : "Hello CuanHero, I would like to renew my subscription."),
+      "",
+      isIndonesian
+        ? `Akun trading: ${selectedAccount.accountId}`
+        : `Trading account: ${selectedAccount.accountId}`,
+      isIndonesian
+        ? `Paket: ${selectedAccount.package?.name || "-"}`
+        : `Package: ${selectedAccount.package?.name || "-"}`,
+      isIndonesian
+        ? `Tanggal berakhir langganan: ${formatDateOnly(selectedAccount.endDate, "id-ID")}`
+        : `Subscription end date: ${formatDateOnly(selectedAccount.endDate)}`,
+    ].join("\n");
+
+    return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+  }, [
+    language,
+    isFreeTrial,
+    renewalMessageEn,
+    renewalMessageId,
+    selectedAccount,
+    whatsappNumber,
+  ]);
+
+  const showRenewButton = useMemo(() => {
+    const daysRemaining = getDaysUntilDate(selectedAccount?.endDate);
+    return daysRemaining !== null && daysRemaining <= 7;
+  }, [selectedAccount?.endDate]);
 
   useEffect(() => {
-    if (!tradingAccount && tradingAccounts.length > 0) {
-      setTradingAccount(tradingAccounts[0] as never);
+    if (!selectedAccount) return;
+
+    if (tradingAccount?.id !== selectedAccount.id) {
+      setTradingAccount(selectedAccount as never);
     }
-  }, [setTradingAccount, tradingAccount, tradingAccounts]);
+
+    if (accountQuery !== selectedAccount.accountId) {
+      const params = new URLSearchParams(searchParamsString);
+      params.set("account", selectedAccount.accountId);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [
+    accountQuery,
+    pathname,
+    router,
+    searchParamsString,
+    selectedAccount,
+    setTradingAccount,
+    tradingAccount?.id,
+  ]);
 
   const currentEAStatus = selectedAccount?.eaStatus ?? 0;
   const botStatus = getBotStatus(currentEAStatus);
   const config = useMemo(
-    () => parseConfig(selectedAccount?.eaConfiguration),
-    [selectedAccount?.eaConfiguration],
+    () => parseConfig(selectedAccount?.eaConfiguration, timeZoneOffsetMinutes),
+    [selectedAccount?.eaConfiguration, timeZoneOffsetMinutes],
   );
   const configForm = useForm<MemberConfigFormValues>({
     resolver: zodResolver(memberConfigSchema),
@@ -497,6 +700,25 @@ export default function MemberHomeDashboard() {
   useEffect(() => {
     configForm.reset(getMemberConfigDefaultValues(config));
   }, [config, configForm, selectedAccount?.id]);
+
+  const handleResetConfig = () => {
+    const defaultConfig = selectedAccount?.expertAdvisor?.defaultConfig;
+    if (!defaultConfig) {
+      toast.error("The default EA configuration is not available.");
+      return;
+    }
+
+    configForm.reset(
+      getMemberConfigDefaultValues(
+        parseConfig(defaultConfig, timeZoneOffsetMinutes),
+      ),
+    );
+    setIsConfigDirty(true);
+    setSaveMessage(
+      "Default EA configuration loaded. Save changes to apply it.",
+    );
+    toast.info("Default EA configuration loaded.");
+  };
 
   const handleSaveConfig = async (values: MemberConfigFormValues) => {
     if (!selectedAccount) return;
@@ -513,14 +735,26 @@ export default function MemberHomeDashboard() {
       MaxLayerCount: Number(values.MaxLayerCount),
       RefillPendingThreshold: Number(values.RefillPendingThreshold),
       RefillLayerCount: Number(values.RefillLayerCount),
-      StartTime: gmt7ToUtc(normalizeTime(values.StartTime)),
-      EndTime: gmt7ToUtc(normalizeTime(values.EndTime)),
+      StartTime: shiftTimeByMinutes(
+        normalizeTime(values.StartTime),
+        -timeZoneOffsetMinutes,
+      ),
+      EndTime: shiftTimeByMinutes(
+        normalizeTime(values.EndTime),
+        -timeZoneOffsetMinutes,
+      ),
       EnablePauseTime: values.EnablePauseTime,
-      PauseStartTime: gmt7ToUtc(normalizeTime(values.PauseStartTime)),
-      PauseEndTime: gmt7ToUtc(normalizeTime(values.PauseEndTime)),
+      PauseStartTime: shiftTimeByMinutes(
+        normalizeTime(values.PauseStartTime),
+        -timeZoneOffsetMinutes,
+      ),
+      PauseEndTime: shiftTimeByMinutes(
+        normalizeTime(values.PauseEndTime),
+        -timeZoneOffsetMinutes,
+      ),
       UseTrailingTP: values.UseTrailingTP,
       TrailingTPStartPoint: Number(values.TrailingTPStartPoint),
-      TrailingDistancePoint: Number(values.TrailingDistancePoint),
+      TrailingStepPoint: Number(values.TrailingStepPoint),
       DailyProfitTargetUSD: Number(values.DailyProfitTargetUSD),
       StopLossUSD: Number(values.StopLossUSD),
       RestMinutesAfterCutLoss: Number(values.RestMinutesAfterCutLoss),
@@ -569,6 +803,8 @@ export default function MemberHomeDashboard() {
   const renderConfigField = (name: ConfigFieldName) => {
     const meta = configFieldMeta[name];
     const error = configForm.formState.errors[name];
+    const suffix = meta.type === "time" ? utcOffsetLabel : meta.suffix;
+    const inputId = `member-config-${name}`;
 
     if (meta.type === "switch") {
       return (
@@ -616,16 +852,48 @@ export default function MemberHomeDashboard() {
     return (
       <label key={name} className="space-y-2">
         <span className="text-sm text-ch-muted">{meta.label}</span>
-        <div className="flex">
-          <Input
-            type={meta.type}
-            step={meta.type === "time" ? 1 : meta.step || "1"}
-            {...configForm.register(name)}
-            className={`${inputClass} ${meta.suffix ? "rounded-r-none" : ""}`}
-          />
-          {meta.suffix && (
+        <div className="flex min-w-0">
+          <div className="relative min-w-0 flex-1">
+            <Input
+              id={inputId}
+              type={meta.type}
+              step={meta.type === "time" ? 1 : meta.step || "1"}
+              {...configForm.register(name)}
+              className={`${inputClass} ${meta.type === "time" ? "pr-10 [&::-webkit-calendar-picker-indicator]:opacity-0" : ""} ${suffix ? "rounded-r-none" : ""}`}
+            />
+            {meta.type === "time" && (
+              <button
+                type="button"
+                aria-label={`Open ${meta.label} picker`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const input = document.getElementById(
+                    inputId,
+                  ) as HTMLInputElement | null;
+
+                  if (!input) return;
+                  input.focus();
+
+                  try {
+                    if (typeof input.showPicker === "function") {
+                      input.showPicker();
+                    } else {
+                      input.click();
+                    }
+                  } catch {
+                    input.click();
+                  }
+                }}
+                className="absolute top-1/2 right-0 z-10 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center text-cyan-300 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          {suffix && (
             <span className="flex h-11 shrink-0 items-center rounded-r-lg border border-l-0 border-cyan-400/20 bg-cyan-950/40 px-3 text-xs font-medium text-cyan-200">
-              {meta.suffix}
+              {suffix}
             </span>
           )}
         </div>
@@ -640,12 +908,9 @@ export default function MemberHomeDashboard() {
     title: string,
     description: string,
     rows: ConfigFieldName[][],
-  ) => (
-    <div className="rounded-2xl border border-cyan-400/15 bg-black/15 p-4 sm:p-5">
-      <div className="mb-5">
-        <h3 className="text-base font-bold text-white">{title}</h3>
-        <p className="mt-1 text-xs leading-5 text-ch-muted">{description}</p>
-      </div>
+    collapsible = false,
+  ) => {
+    const fields = (
       <div className="grid gap-4">
         {rows.map((row) => (
           <div
@@ -656,37 +921,69 @@ export default function MemberHomeDashboard() {
           </div>
         ))}
       </div>
-    </div>
-  );
+    );
+
+    if (collapsible) {
+      return (
+        <details className="group overflow-hidden rounded-2xl border border-cyan-400/15 bg-black/15">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 select-none [&::-webkit-details-marker]:hidden sm:p-5">
+            <div>
+              <h3 className="text-base font-bold text-white">{title}</h3>
+              <p className="mt-1 text-xs leading-5 text-ch-muted">
+                {description}
+              </p>
+            </div>
+            <ChevronDown className="h-5 w-5 shrink-0 text-cyan-300 transition-transform duration-200 group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-cyan-400/10 p-4 sm:p-5">{fields}</div>
+        </details>
+      );
+    }
+
+    return (
+      <div className="rounded-2xl border border-cyan-400/15 bg-black/15 p-4 sm:p-5">
+        <div className="mb-5">
+          <h3 className="text-base font-bold text-white">{title}</h3>
+          <p className="mt-1 text-xs leading-5 text-ch-muted">{description}</p>
+        </div>
+        {fields}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-5">
       <section className={cardClass}>
         <div className={sectionContentClass}>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <p className="text-xs uppercase tracking-[0.24em] text-cyan-300 drop-shadow-[0_0_10px_rgba(0,217,255,0.8)]">
                 Trading Account
               </p>
-              <h1 className="mt-1 text-xl font-bold text-white">
+              <h1 className="mt-1 text-lg font-bold text-white sm:text-xl">
                 Select a trading account
               </h1>
             </div>
-            <div className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200 shadow-[0_0_18px_rgba(0,217,255,0.18)]">
+            <div className="shrink-0 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200 shadow-[0_0_18px_rgba(0,217,255,0.18)]">
               {tradingAccounts.length} accounts
             </div>
           </div>
 
           <Select
-            value={selectedAccount?.id ? String(selectedAccount.id) : undefined}
+            value={selectedAccount?.accountId || undefined}
             onValueChange={(value) => {
               const account = tradingAccounts.find(
-                (item) => String(item.id) === value,
+                (item) => item.accountId === value,
               );
               if (account) {
                 setIsConfigDirty(false);
                 setSaveMessage("");
-                setTradingAccount(account as never);
+
+                const params = new URLSearchParams(searchParamsString);
+                params.set("account", account.accountId);
+                router.replace(`${pathname}?${params.toString()}`, {
+                  scroll: false,
+                });
               }
             }}
           >
@@ -697,7 +994,7 @@ export default function MemberHomeDashboard() {
               <SelectGroup>
                 <SelectLabel>Trading Account</SelectLabel>
                 {tradingAccounts.map((account) => (
-                  <SelectItem key={account.id} value={String(account.id)}>
+                  <SelectItem key={account.id} value={account.accountId}>
                     {account.accountId} -{" "}
                     {account.accountName || account.accountServer || "Trading"}
                   </SelectItem>
@@ -706,24 +1003,46 @@ export default function MemberHomeDashboard() {
             </SelectContent>
           </Select>
 
-          <div className="mt-4 grid gap-3 text-sm text-ch-muted sm:grid-cols-3">
-            <div className={fieldPanelClass}>
-              <p className="text-xs text-cyan-300/80">Server</p>
-              <p className="mt-1 font-semibold text-white">
-                {selectedAccount?.accountServer || "-"}
-              </p>
-            </div>
+          <div className="mt-4 grid gap-3 text-sm text-ch-muted sm:grid-cols-2">
             <div className={fieldPanelClass}>
               <p className="text-xs text-cyan-300/80">Package</p>
-              <p className="mt-1 font-semibold text-white">
-                {selectedAccount?.package?.name || "-"}
-              </p>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <p className="font-semibold text-white">
+                  {selectedAccount?.package?.name || "-"}
+                </p>
+                {isFreeTrial && renewalHref && (
+                  <Button
+                    asChild
+                    size="sm"
+                    className="h-auto min-h-8 shrink-0 bg-emerald-500 px-3 py-1.5 text-xs font-semibold whitespace-normal text-white hover:bg-emerald-400"
+                  >
+                    <a href={renewalHref} target="_blank" rel="noreferrer">
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      Upgrade to IB Monthly
+                    </a>
+                  </Button>
+                )}
+              </div>
             </div>
             <div className={fieldPanelClass}>
               <p className="text-xs text-cyan-300/80">Subscription End Date</p>
-              <p className="mt-1 font-semibold text-white">
-                {formatDateOnly(selectedAccount?.endDate)}
-              </p>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <p className="font-semibold text-white">
+                  {formatDateOnly(selectedAccount?.endDate)}
+                </p>
+                {!isFreeTrial && showRenewButton && renewalHref && (
+                  <Button
+                    asChild
+                    size="sm"
+                    className="h-8 shrink-0 bg-emerald-500 px-3 text-xs font-semibold text-white hover:bg-emerald-400"
+                  >
+                    <a href={renewalHref} target="_blank" rel="noreferrer">
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      Renew
+                    </a>
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -771,19 +1090,11 @@ export default function MemberHomeDashboard() {
               {botStatus.detail}
             </p>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className={fieldPanelClass}>
-                <p className="text-xs text-cyan-300/80">Account Status</p>
-                <p className="mt-1 font-semibold text-white">
-                  {getStatusText(selectedAccount?.status)}
-                </p>
-              </div>
-              <div className={fieldPanelClass}>
-                <p className="text-xs text-cyan-300/80">Last Sync</p>
-                <p className="mt-1 font-semibold text-white">
-                  {formatDate(selectedAccount?.lastSync)}
-                </p>
-              </div>
+            <div className={`${fieldPanelClass} mt-5`}>
+              <p className="text-xs text-cyan-300/80">Last Sync</p>
+              <p className="mt-1 font-semibold text-white">
+                {formatDate(selectedAccount?.lastSync)}
+              </p>
             </div>
           </div>
         </section>
@@ -799,7 +1110,23 @@ export default function MemberHomeDashboard() {
                   Automation settings
                 </h2>
               </div>
-              <ShieldAlert className="h-5 w-5 text-amber-300" />
+              <div className="flex shrink-0 items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    !selectedAccount?.expertAdvisor?.defaultConfig || isSaving
+                  }
+                  onClick={handleResetConfig}
+                  className="border-cyan-400/30 bg-cyan-400/5 text-cyan-100 hover:bg-cyan-400/15 hover:text-white"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span className="hidden sm:inline">Reset to Default</span>
+                  <span className="sm:hidden">Reset</span>
+                </Button>
+                <ShieldAlert className="hidden h-5 w-5 text-amber-300 sm:block" />
+              </div>
             </div>
 
             <div className="grid gap-5">
@@ -810,13 +1137,14 @@ export default function MemberHomeDashboard() {
               )}
               {renderConfigSection(
                 "Basic Settings",
-                "Strategy, target, trailing, and trading schedule settings.",
+                "Trading schedule, pause window, risk targets, recovery time, and trade direction settings.",
                 basicConfigRows,
               )}
               {renderConfigSection(
                 "Advanced Settings",
                 "Layering, trade direction, news filter, magic number, and order execution settings.",
                 advancedConfigRows,
+                true,
               )}
 
               <div className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-192 -translate-x-1/2 rounded-2xl border border-cyan-400/30 bg-[rgba(3,10,24,0.92)] p-3 shadow-[0_0_32px_rgba(0,217,255,0.16),0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">

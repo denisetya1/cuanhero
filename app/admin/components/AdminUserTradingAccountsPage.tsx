@@ -74,6 +74,7 @@ type TradingAccountItem = {
   status: number;
   eaStatus: number;
   eaConfiguration?: Record<string, unknown> | null;
+  lastSync?: string | Date | null;
   createdAt: string | Date;
   endDate?: string | Date | null;
   package?: {
@@ -393,9 +394,14 @@ export default function AdminUserTradingAccountsPage({
   };
 
   const handleOpenConfigDialog = (account: TradingAccountItem) => {
-    setConfigAccount(account);
+    const latestAccount =
+      tradingAccounts.find((item) => item.id === account.id) || account;
+
+    setConfigAccount(latestAccount);
     setConfigMessage("");
-    setConfigText(JSON.stringify(account.eaConfiguration || {}, null, 2));
+    setConfigText(
+      JSON.stringify(latestAccount.eaConfiguration || {}, null, 2),
+    );
   };
 
   const handleConfigDialogChange = (open: boolean) => {
@@ -429,21 +435,57 @@ export default function AdminUserTradingAccountsPage({
 
     setConfigMessage("");
     try {
-      await updateTradingAccountConfig.mutateAsync({
+      const updateResponse = await updateTradingAccountConfig.mutateAsync({
         userId,
         accountId: configAccount.id,
         configuration,
       });
+
+      const updatedAccount = updateResponse?.data as
+        | Pick<
+            TradingAccountItem,
+            "id" | "accountId" | "eaConfiguration" | "lastSync"
+          >
+        | undefined;
+
+      // Update the visible list immediately so reopening the dialog cannot use
+      // the account object from before the configuration was saved.
+      queryClient.setQueryData<{ data?: UserTradingAccountsResponse }>(
+        ["admin-user-trading-accounts", userId],
+        (current) => {
+          if (!current?.data) return current;
+
+          return {
+            ...current,
+            data: {
+              ...current.data,
+              tradingAccounts: current.data.tradingAccounts.map((account) =>
+                account.id === configAccount.id
+                  ? {
+                      ...account,
+                      eaConfiguration:
+                        updatedAccount?.eaConfiguration || configuration,
+                      lastSync: updatedAccount?.lastSync ?? account.lastSync,
+                    }
+                  : account,
+              ),
+            },
+          };
+        },
+      );
+
+      await Promise.all([
+        queryClient.refetchQueries({
+          queryKey: ["admin-user-trading-accounts", userId],
+          type: "active",
+        }),
+        queryClient.invalidateQueries({ queryKey: ["admin-trading-accounts"] }),
+      ]);
+
       setConfigAccount(null);
       setConfigMessage("");
       setConfigText("");
       toast.success("EA configuration updated and synced successfully.");
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["admin-user-trading-accounts", userId],
-        }),
-        queryClient.invalidateQueries({ queryKey: ["admin-trading-accounts"] }),
-      ]);
     } catch (error) {
       const errorMessage =
         error instanceof Error

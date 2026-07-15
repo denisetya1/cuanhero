@@ -1,7 +1,18 @@
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Image from "next/image";
 import LoginForm from "../../components/LoginForm";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (session) {
+    redirect("/member/home");
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#020713] text-white">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(0,217,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(217,70,239,0.035)_1px,transparent_1px)] bg-size-[44px_44px]" />

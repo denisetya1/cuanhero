@@ -80,6 +80,7 @@ model Verification {
 
 model Package {
   id              Int              @id @default(autoincrement())
+  code            String?          @unique
   name            String
   description     Json?            @db.Json
   features        Json?            @db.Json
@@ -220,6 +221,8 @@ model AppSetting {
   metaDescriptionId     String   @map("meta_description_id") @db.Text
   orderMessageEn        String   @map("order_message_en") @db.Text
   orderMessageId        String   @map("order_message_id") @db.Text
+  freeTrialMessageEn    String?   @map("free_trial_message_en") @db.Text
+  freeTrialMessageId    String?   @map("free_trial_message_id") @db.Text
   renewalMessageEn      String   @map("renewal_message_en") @db.Text
   renewalMessageId      String   @map("renewal_message_id") @db.Text
   consultationMessageEn String   @map("consultation_message_en") @db.Text
@@ -230,4 +233,26 @@ model AppSetting {
   updatedBy             String?  @map("updated_by")
 
   @@map("app_settings")
+}
+
+model CmsPage {
+  id                Int       @id @default(autoincrement())
+  slug              String    @unique
+  titleEn           String    @map("title_en")
+  titleId           String    @map("title_id")
+  contentEn         String    @map("content_en") @db.LongText
+  contentId         String    @map("content_id") @db.LongText
+  metaTitleEn       String    @default("") @map("meta_title_en")
+  metaTitleId       String    @default("") @map("meta_title_id")
+  metaDescriptionEn String    @map("meta_description_en") @db.Text
+  metaDescriptionId String    @map("meta_description_id") @db.Text
+  isPublished       Boolean   @default(false) @map("is_published")
+  publishedAt       DateTime? @map("published_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  @@index([isPublished, updatedAt], map: "cms_pages_published_updated_idx")
+  @@map("cms_pages")
 }

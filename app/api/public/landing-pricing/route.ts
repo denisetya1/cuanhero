@@ -3,7 +3,7 @@ import { buildErrorResponse, buildResponse } from "@/lib/response";
 
 export const GET = async () => {
   try {
-    const [expertAdvisors, packages] = await Promise.all([
+    const [expertAdvisors, packages, settings] = await Promise.all([
       prisma.expertAdvisor.findMany({
         where: {
           isActive: true,
@@ -30,11 +30,24 @@ export const GET = async () => {
           orderNumber: true,
         },
       }),
+      prisma.appSetting.findUnique({
+        where: { id: 1 },
+        select: {
+          whatsappNumber: true,
+          orderMessageEn: true,
+          orderMessageId: true,
+        },
+      }),
     ]);
 
     return buildResponse({
       expertAdvisors,
       packages,
+      settings: {
+        whatsappNumber: settings?.whatsappNumber || "",
+        orderMessageEn: settings?.orderMessageEn || "",
+        orderMessageId: settings?.orderMessageId || "",
+      },
     });
   } catch (error) {
     console.error("GET_PUBLIC_LANDING_PRICING_ERROR:", error);

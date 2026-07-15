@@ -1,5 +1,6 @@
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import ExnessBanner from "./components/ExnessBanner";
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -11,6 +12,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
       <main className="relative z-10 grow bg-transparent">{children}</main>
 
+      <ExnessBanner />
       <Footer />
     </div>
   );
