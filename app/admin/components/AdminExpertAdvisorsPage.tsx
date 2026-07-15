@@ -28,7 +28,11 @@ import AdminTablePagination, {
   DEFAULT_TABLE_PAGE_SIZE,
 } from "./AdminTablePagination";
 import { useAdminAccess } from "./AdminAccessContext";
-import { getLocalizedText } from "@/lib/localized-text";
+import {
+  getLocalizedText,
+  localizedTextToJson,
+  normalizeLocalizedText,
+} from "@/lib/localized-text";
 
 type ExpertAdvisorItem = {
   id: number;
@@ -68,24 +72,8 @@ const expertAdvisorSchema = z.object({
         return false;
       }
     }, "Default config must be a JSON object."),
-  description: z
-    .string()
-    .trim()
-    .optional()
-    .refine((value) => {
-      if (!value) return true;
-      try {
-        const parsed = JSON.parse(value);
-        return (
-          parsed &&
-          typeof parsed === "object" &&
-          !Array.isArray(parsed) &&
-          Object.values(parsed).every((item) => typeof item === "string")
-        );
-      } catch {
-        return false;
-      }
-    }, "Description must be a JSON object containing language and text pairs."),
+  descriptionEn: z.string().trim().optional(),
+  descriptionId: z.string().trim().optional(),
   image: z.string().trim().optional(),
   orderNumber: z
     .string()
@@ -105,29 +93,14 @@ const expertAdvisorDefaultValues: ExpertAdvisorFormValues = {
   name: "",
   eaFileName: "",
   defaultConfig: "",
-  description: "",
+  descriptionEn: "",
+  descriptionId: "",
   image: "",
   orderNumber: "9999",
 };
 
-const stringifyDescription = (description: unknown) => {
-  if (!description) return "";
-  if (typeof description === "string") {
-    return JSON.stringify({ id: description }, null, 2);
-  }
-
-  try {
-    return JSON.stringify(description, null, 2);
-  } catch {
-    return "";
-  }
-};
-
-const parseDescription = (description?: string) => {
-  return description?.trim()
-    ? (JSON.parse(description) as Record<string, string>)
-    : null;
-};
+const buildDescription = (descriptionEn?: string, descriptionId?: string) =>
+  localizedTextToJson({ en: descriptionEn || "", id: descriptionId || "" });
 
 const stringifyDefaultConfig = (defaultConfig: unknown) => {
   if (!defaultConfig) return "";
@@ -224,13 +197,16 @@ export default function AdminExpertAdvisorsPage() {
   };
 
   const handleOpenEditDialog = (expertAdvisor: ExpertAdvisorItem) => {
+    const description = normalizeLocalizedText(expertAdvisor.description);
+
     setSelectedExpertAdvisor(expertAdvisor);
     setFormMessage("");
     editExpertAdvisorForm.reset({
       name: expertAdvisor.name,
       eaFileName: expertAdvisor.eaFileName || "",
       defaultConfig: stringifyDefaultConfig(expertAdvisor.defaultConfig),
-      description: stringifyDescription(expertAdvisor.description),
+      descriptionEn: description.en,
+      descriptionId: description.id,
       image: expertAdvisor.image || "",
       orderNumber: String(expertAdvisor.orderNumber),
     });
@@ -271,7 +247,7 @@ export default function AdminExpertAdvisorsPage() {
       name: values.name.trim(),
       eaFileName: values.eaFileName?.trim() || "",
       defaultConfig: parseDefaultConfig(values.defaultConfig),
-      description: parseDescription(values.description),
+      description: buildDescription(values.descriptionEn, values.descriptionId),
       image: values.image?.trim() || "",
       isActive: true,
       orderNumber: Number(values.orderNumber),
@@ -313,7 +289,10 @@ export default function AdminExpertAdvisorsPage() {
         name: values.name.trim(),
         eaFileName: values.eaFileName?.trim() || "",
         defaultConfig: parseDefaultConfig(values.defaultConfig),
-        description: parseDescription(values.description),
+        description: buildDescription(
+          values.descriptionEn,
+          values.descriptionId,
+        ),
         image: values.image?.trim() || "",
         isActive: selectedExpertAdvisor.isActive,
         orderNumber: Number(values.orderNumber),
@@ -376,8 +355,8 @@ export default function AdminExpertAdvisorsPage() {
         name: expertAdvisor.name,
         eaFileName: expertAdvisor.eaFileName || "",
         defaultConfig: expertAdvisor.defaultConfig || null,
-        description: parseDescription(
-          stringifyDescription(expertAdvisor.description),
+        description: localizedTextToJson(
+          normalizeLocalizedText(expertAdvisor.description),
         ),
         image: expertAdvisor.image || "",
         isActive: checked,
@@ -484,21 +463,29 @@ export default function AdminExpertAdvisorsPage() {
         )}
       </label>
 
-      <label className="block space-y-2.5">
-        <span className="text-sm font-medium text-gray-700">
-          Description (JSON)
-        </span>
-        <textarea
-          {...form.register("description")}
-          placeholder={'{\n  "en": "English description",\n  "id": "Deskripsi Indonesia"\n}'}
-          className={adminTextareaClass}
-        />
-        {form.formState.errors.description && (
-          <span className="text-xs text-red-600">
-            {form.formState.errors.description.message}
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="block space-y-2.5">
+          <span className="text-sm font-medium text-gray-700">
+            Description (English)
           </span>
-        )}
-      </label>
+          <textarea
+            {...form.register("descriptionEn")}
+            placeholder="English EA description"
+            className={adminTextareaClass}
+          />
+        </label>
+
+        <label className="block space-y-2.5">
+          <span className="text-sm font-medium text-gray-700">
+            Description (Indonesian)
+          </span>
+          <textarea
+            {...form.register("descriptionId")}
+            placeholder="Deskripsi EA dalam Bahasa Indonesia"
+            className={adminTextareaClass}
+          />
+        </label>
+      </div>
 
     </div>
   );

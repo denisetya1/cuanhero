@@ -100,28 +100,30 @@ export default function AdminLoginForm() {
           )}
         </label>
 
-        <label className="space-y-2">
-          <span className="flex items-center justify-between text-sm text-slate-300">
-            Password
+        <div>
+          <label className="space-y-2">
+            <span className="text-sm text-slate-300">Password</span>
+            <Input
+              type="password"
+              {...register("password")}
+              placeholder="Enter password"
+              className="h-11 border-cyan-400/20 bg-black/35 text-cyan-50 shadow-inner shadow-cyan-950/40 placeholder:text-slate-500 focus-visible:border-cyan-300 focus-visible:ring-cyan-400/30"
+            />
+            {errors.password && (
+              <span className="text-xs text-red-300">
+                {errors.password.message}
+              </span>
+            )}
+          </label>
+          <div className="mt-3 flex justify-end">
             <Link
               href="/admin/forgot-password"
               className="text-xs text-cyan-300 hover:text-cyan-200"
             >
               Forgot password?
             </Link>
-          </span>
-          <Input
-            type="password"
-            {...register("password")}
-            placeholder="Enter password"
-            className="h-11 border-cyan-400/20 bg-black/35 text-cyan-50 shadow-inner shadow-cyan-950/40 placeholder:text-slate-500 focus-visible:border-cyan-300 focus-visible:ring-cyan-400/30"
-          />
-          {errors.password && (
-            <span className="text-xs text-red-300">
-              {errors.password.message}
-            </span>
-          )}
-        </label>
+          </div>
+        </div>
       </div>
 
       <Button

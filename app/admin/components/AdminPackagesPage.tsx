@@ -34,7 +34,11 @@ import AdminTablePagination, {
   DEFAULT_TABLE_PAGE_SIZE,
 } from "./AdminTablePagination";
 import { useAdminAccess } from "./AdminAccessContext";
-import { getLocalizedText } from "@/lib/localized-text";
+import {
+  getLocalizedText,
+  localizedTextToJson,
+  normalizeLocalizedText,
+} from "@/lib/localized-text";
 
 type PackageItem = {
   id: number;
@@ -79,24 +83,8 @@ const packageSchema = z.object({
       message: "Code may only contain letters, numbers, and underscores.",
     }),
   name: z.string().trim().min(1, "Package name is required."),
-  description: z
-    .string()
-    .trim()
-    .optional()
-    .refine((value) => {
-      if (!value) return true;
-      try {
-        const parsed = JSON.parse(value);
-        return (
-          parsed &&
-          typeof parsed === "object" &&
-          !Array.isArray(parsed) &&
-          Object.values(parsed).every((item) => typeof item === "string")
-        );
-      } catch {
-        return false;
-      }
-    }, "Description must be a JSON object containing language and text pairs."),
+  descriptionEn: z.string().trim().optional(),
+  descriptionId: z.string().trim().optional(),
   price: z
     .string()
     .trim()
@@ -118,22 +106,8 @@ const packageSchema = z.object({
         message: "Discount must be a whole number from 0 to 100.",
       },
     ),
-  features: z
-    .string()
-    .trim()
-    .optional()
-    .refine((value) => {
-      if (!value) {
-        return true;
-      }
-
-      try {
-        JSON.parse(value);
-        return true;
-      } catch {
-        return false;
-      }
-    }, "Features must be a valid JSON string."),
+  featuresEn: z.string().trim().optional(),
+  featuresId: z.string().trim().optional(),
   recurringType: z.string().trim().min(1, "Recurring type is required."),
   orderNumber: z
     .string()
@@ -152,53 +126,64 @@ type PackageFormValues = z.infer<typeof packageSchema>;
 const packageDefaultValues: PackageFormValues = {
   code: "",
   name: "",
-  description: "",
+  descriptionEn: "",
+  descriptionId: "",
   price: "",
   discountPercent: "",
-  features: "",
+  featuresEn: "",
+  featuresId: "",
   recurringType: "30d",
   orderNumber: "9999",
 };
 
-const stringifyFeatures = (features: unknown) => {
-  if (!features) {
-    return "";
-  }
+const getFeatureLines = (features: unknown, lang: "en" | "id") => {
+  const localizedFeatures =
+    features && typeof features === "object" && !Array.isArray(features)
+      ? (features as Record<string, unknown>)[lang]
+      : features;
 
-  try {
-    return JSON.stringify(features, null, 2);
-  } catch {
-    return "";
-  }
+  if (!Array.isArray(localizedFeatures)) return "";
+
+  return localizedFeatures
+    .filter((feature) => {
+      if (!feature || typeof feature !== "object" || Array.isArray(feature)) {
+        return true;
+      }
+
+      return (feature as Record<string, unknown>).checked !== false;
+    })
+    .map((feature) => {
+      if (typeof feature === "string") return feature.trim();
+      if (!feature || typeof feature !== "object" || Array.isArray(feature)) {
+        return "";
+      }
+
+      const title = (feature as Record<string, unknown>).title ?? feature;
+      if (typeof title === "string") return title.trim();
+      if (!title || typeof title !== "object" || Array.isArray(title)) return "";
+
+      const localizedTitle = (title as Record<string, unknown>)[lang];
+      return typeof localizedTitle === "string" ? localizedTitle.trim() : "";
+    })
+    .filter(Boolean)
+    .join("\n");
 };
 
-const stringifyDescription = (description: unknown) => {
-  if (!description) return "";
-  if (typeof description === "string") {
-    return JSON.stringify({ id: description }, null, 2);
-  }
+const buildDescription = (descriptionEn?: string, descriptionId?: string) =>
+  localizedTextToJson({ en: descriptionEn || "", id: descriptionId || "" });
 
-  try {
-    return JSON.stringify(description, null, 2);
-  } catch {
-    return "";
-  }
-};
+const buildFeatures = (featuresEn?: string, featuresId?: string) => {
+  const toItems = (value?: string) =>
+    (value || "")
+      .split("\n")
+      .map((title) => title.trim())
+      .filter(Boolean)
+      .map((title) => ({ title, checked: true }));
 
-const parseDescription = (description?: string) => {
-  return description?.trim()
-    ? (JSON.parse(description) as Record<string, string>)
-    : null;
-};
+  const en = toItems(featuresEn);
+  const id = toItems(featuresId);
 
-const parseFeatures = (features: string | undefined) => {
-  const trimmedFeatures = features?.trim();
-
-  if (!trimmedFeatures) {
-    return null;
-  }
-
-  return JSON.parse(trimmedFeatures);
+  return en.length || id.length ? { en, id } : null;
 };
 
 const formatDate = (value: string | Date) => {
@@ -279,19 +264,23 @@ export default function AdminPackagesPage() {
   };
 
   const handleOpenEditDialog = (packageItem: PackageItem) => {
+    const description = normalizeLocalizedText(packageItem.description);
+
     setSelectedPackage(packageItem);
     setFormMessage("");
     editPackageForm.reset({
       code: packageItem.code || "",
       name: packageItem.name,
-      description: stringifyDescription(packageItem.description),
+      descriptionEn: description.en,
+      descriptionId: description.id,
       price: packageItem.price,
       discountPercent:
         packageItem.discountPercent === null ||
         packageItem.discountPercent === undefined
           ? ""
           : String(packageItem.discountPercent),
-      features: stringifyFeatures(packageItem.features),
+      featuresEn: getFeatureLines(packageItem.features, "en"),
+      featuresId: getFeatureLines(packageItem.features, "id"),
       recurringType: packageItem.recurringType,
       orderNumber: String(packageItem.orderNumber),
     });
@@ -329,12 +318,12 @@ export default function AdminPackagesPage() {
     const payload: AdminPackagePayload = {
       code: values.code?.trim().toUpperCase() || null,
       name: values.name.trim(),
-      description: parseDescription(values.description),
+      description: buildDescription(values.descriptionEn, values.descriptionId),
       price: values.price.trim(),
       discountPercent: values.discountPercent
         ? Number(values.discountPercent)
         : null,
-      features: parseFeatures(values.features),
+      features: buildFeatures(values.featuresEn, values.featuresId),
       recurringType: values.recurringType.trim(),
       orderNumber: Number(values.orderNumber),
     };
@@ -368,12 +357,15 @@ export default function AdminPackagesPage() {
         packageId: selectedPackage.id,
         code: values.code?.trim().toUpperCase() || null,
         name: values.name.trim(),
-        description: parseDescription(values.description),
+        description: buildDescription(
+          values.descriptionEn,
+          values.descriptionId,
+        ),
         price: values.price.trim(),
         discountPercent: values.discountPercent
           ? Number(values.discountPercent)
           : null,
-        features: parseFeatures(values.features),
+        features: buildFeatures(values.featuresEn, values.featuresId),
         recurringType: values.recurringType.trim(),
         orderNumber: Number(values.orderNumber),
       });
@@ -467,21 +459,29 @@ export default function AdminPackagesPage() {
         )}
       </label>
 
-      <label className="block space-y-2.5">
-        <span className="text-sm font-medium text-gray-700">
-          Description (JSON)
-        </span>
-        <textarea
-          {...form.register("description")}
-          placeholder={'{\n  "en": "English description",\n  "id": "Deskripsi Indonesia"\n}'}
-          className={adminTextareaClass}
-        />
-        {form.formState.errors.description && (
-          <span className="text-xs text-red-600">
-            {form.formState.errors.description.message}
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="block space-y-2.5">
+          <span className="text-sm font-medium text-gray-700">
+            Description (English)
           </span>
-        )}
-      </label>
+          <textarea
+            {...form.register("descriptionEn")}
+            placeholder="English package description"
+            className={adminTextareaClass}
+          />
+        </label>
+
+        <label className="block space-y-2.5">
+          <span className="text-sm font-medium text-gray-700">
+            Description (Indonesian)
+          </span>
+          <textarea
+            {...form.register("descriptionId")}
+            placeholder="Deskripsi paket dalam Bahasa Indonesia"
+            className={adminTextareaClass}
+          />
+        </label>
+      </div>
 
 
       <label className="block space-y-2.5">
@@ -552,19 +552,35 @@ export default function AdminPackagesPage() {
         )}
       </label>
 
-      <label className="block space-y-2.5">
-        <span className="text-sm font-medium text-gray-700">Features JSON</span>
-        <textarea
-          {...form.register("features")}
-          placeholder={'[\n  {\n    "title": { "en": "Free VPS", "id": "VPS Gratis" },\n    "checked": true\n  }\n]'}
-          className={`${adminTextareaClass} font-mono text-xs`}
-        />
-        {form.formState.errors.features && (
-          <span className="text-xs text-red-600">
-            {form.formState.errors.features.message}
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="block space-y-2.5">
+          <span className="text-sm font-medium text-gray-700">
+            Features (English)
           </span>
-        )}
-      </label>
+          <textarea
+            {...form.register("featuresEn")}
+            placeholder={"Free VPS\nCommunity support\nAutomatic updates"}
+            className={`${adminTextareaClass} min-h-36`}
+          />
+          <span className="block text-xs text-gray-400">
+            Enter one feature per line.
+          </span>
+        </label>
+
+        <label className="block space-y-2.5">
+          <span className="text-sm font-medium text-gray-700">
+            Features (Indonesian)
+          </span>
+          <textarea
+            {...form.register("featuresId")}
+            placeholder={"VPS Gratis\nDukungan komunitas\nUpdate otomatis"}
+            className={`${adminTextareaClass} min-h-36`}
+          />
+          <span className="block text-xs text-gray-400">
+            Masukkan satu fitur per baris.
+          </span>
+        </label>
+      </div>
     </div>
   );
 
