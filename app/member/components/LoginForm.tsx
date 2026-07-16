@@ -9,6 +9,7 @@ import { z } from "zod";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { sanitizeMemberRedirect } from "@/lib/member-redirect";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email address."),
@@ -17,7 +18,8 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-export default function LoginForm() {
+export default function LoginForm({ redirectTo }: { redirectTo?: string }) {
+  const safeRedirectTo = sanitizeMemberRedirect(redirectTo);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const {
@@ -45,7 +47,7 @@ export default function LoginForm() {
           setLoading(false);
         },
         onSuccess: () => {
-          window.location.href = "/member/home";
+          window.location.assign(safeRedirectTo);
         },
       },
     });

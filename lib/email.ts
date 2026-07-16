@@ -17,6 +17,14 @@ type SubscriptionRenewalEmail = {
   to: string;
 };
 
+type DeploymentReadyEmail = {
+  accountId: string;
+  expertAdvisorName: string;
+  memberUrl: string;
+  name?: string | null;
+  to: string;
+};
+
 const escapeHtml = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -146,6 +154,62 @@ export async function sendSubscriptionRenewalEmail({
   if (error) {
     throw new Error(
       `Resend failed to send subscription renewal email: ${error.message}`,
+    );
+  }
+}
+
+export async function sendDeploymentReadyEmail({
+  accountId,
+  expertAdvisorName,
+  memberUrl,
+  name,
+  to,
+}: DeploymentReadyEmail) {
+  const displayName = name?.trim() || "CuanHero Member";
+  const safeName = escapeHtml(displayName);
+  const safeAccountId = escapeHtml(accountId);
+  const safeExpertAdvisorName = escapeHtml(expertAdvisorName);
+  const safeMemberUrl = escapeHtml(memberUrl);
+  const { from, resend } = getResendConfig();
+  const { error } = await resend.emails.send({
+    from,
+    to,
+    subject: `Robot CuanHero untuk akun ${accountId} sudah siap`,
+    text: [
+      `Halo ${displayName},`,
+      "",
+      `Robot ${expertAdvisorName} untuk trading account ${accountId} sudah selesai di-deploy dan siap digunakan.`,
+      "",
+      "Silakan buka Member Dashboard, aktifkan Enable Auto Trade, kemudian klik Save Changes agar robot mulai melakukan trading otomatis.",
+      "",
+      `Buka Member Dashboard: ${memberUrl}`,
+      "",
+      "Pastikan pengaturan akun sudah sesuai sebelum mengaktifkan Auto Trade.",
+    ].join("\n"),
+    html: `
+      <div style="background:#020713;padding:32px 16px;font-family:Arial,sans-serif;color:#dbeafe">
+        <div style="max-width:560px;margin:0 auto;border:1px solid #155e75;border-radius:16px;background:#071225;padding:32px">
+          <p style="margin:0 0 8px;color:#22d3ee;font-size:12px;letter-spacing:2px;text-transform:uppercase">CuanHero Deployment</p>
+          <h1 style="margin:0 0 20px;color:#fff;font-size:24px">Robot Anda sudah siap</h1>
+          <p style="margin:0 0 12px;line-height:1.6">Halo ${safeName},</p>
+          <p style="margin:0 0 20px;line-height:1.6;color:#94a3b8">Robot telah selesai di-deploy dan siap digunakan.</p>
+          <div style="margin:0 0 24px;border:1px solid #164e63;border-radius:12px;background:#020b18;padding:16px;line-height:1.8;color:#cbd5e1">
+            <div><span style="color:#64748b">Trading account:</span> ${safeAccountId}</div>
+            <div><span style="color:#64748b">Expert Advisor:</span> ${safeExpertAdvisorName}</div>
+          </div>
+          <div style="margin:0 0 24px;border-left:3px solid #22d3ee;background:#083344;padding:14px 16px;line-height:1.6;color:#cffafe">
+            Buka Member Dashboard, aktifkan <strong>Enable Auto Trade</strong>, lalu klik <strong>Save Changes</strong> agar robot mulai melakukan trading otomatis.
+          </div>
+          <a href="${safeMemberUrl}" style="display:inline-block;border-radius:10px;background:#0891b2;padding:13px 20px;color:#fff;text-decoration:none;font-weight:700">Open Member Dashboard</a>
+          <p style="margin:24px 0 0;line-height:1.6;color:#64748b;font-size:13px">Pastikan pengaturan akun sudah sesuai sebelum mengaktifkan Auto Trade.</p>
+        </div>
+      </div>
+    `,
+  });
+
+  if (error) {
+    throw new Error(
+      `Resend failed to send deployment ready email: ${error.message}`,
     );
   }
 }

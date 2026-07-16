@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Mail,
   Pause,
   Pencil,
   Play,
@@ -53,6 +54,7 @@ import {
   useGetAdminTradingAccountOptions,
   useGetAdminUserTradingAccounts,
   useManageAdminTradingAccountRuntime,
+  useSendAdminTradingAccountReadyNotification,
   useUpdateAdminTradingAccount,
   useUpdateAdminTradingAccountConfig,
   useVerifyAdminTradingAccountIb,
@@ -172,12 +174,12 @@ const tradingAccountSchema = z.object({
   expertAdvisorId: z.string().trim().min(1, "Expert Advisor is required."),
   recurringPrice: numericTextSchema,
   currency: z.enum(["IDR", "USD", "MYR", "SGD"]),
+  status: z.enum(["0", "1", "2"]),
+  endDate: z.string().optional(),
 });
 
 const editTradingAccountSchema = tradingAccountSchema.extend({
   password: z.string().optional(),
-  status: z.enum(["0", "1", "2"]),
-  endDate: z.string().optional(),
 });
 
 type TradingAccountFormValues = z.infer<typeof tradingAccountSchema>;
@@ -196,6 +198,8 @@ const getTradingAccountDefaultValues = (
   expertAdvisorId: expertAdvisors[0] ? String(expertAdvisors[0].id) : "",
   recurringPrice: "",
   currency: "IDR",
+  status: "1",
+  endDate: "",
 });
 
 const formatDateInputValue = (date: Date) => {
@@ -318,11 +322,14 @@ export default function AdminUserTradingAccountsPage({
   const deleteTradingAccount = useDeleteAdminTradingAccount();
   const manageTradingAccountRuntime =
     useManageAdminTradingAccountRuntime();
+  const sendReadyNotification =
+    useSendAdminTradingAccountReadyNotification();
   const { data: response, error, isError, isLoading } =
     useGetAdminUserTradingAccounts(userId);
   const { data: optionsResponse } = useGetAdminTradingAccountOptions();
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [openCreateEndDatePicker, setOpenCreateEndDatePicker] = useState(false);
   const [openEndDatePicker, setOpenEndDatePicker] = useState(false);
   const [visiblePasswordIds, setVisiblePasswordIds] = useState<
     Record<number, boolean>
@@ -346,6 +353,9 @@ export default function AdminUserTradingAccountsPage({
     accountId: number;
     action: "deploy" | "pause" | "resume" | "terminate";
   } | null>(null);
+  const [notifyingAccountId, setNotifyingAccountId] = useState<number | null>(
+    null,
+  );
   const user = response?.data as UserTradingAccountsResponse | undefined;
   const options = optionsResponse?.data as
     | TradingAccountOptionsResponse
@@ -388,6 +398,7 @@ export default function AdminUserTradingAccountsPage({
 
   const handleDialogChange = (open: boolean) => {
     setOpenCreateDialog(open);
+    setOpenCreateEndDatePicker(false);
 
     if (open) {
       setIbVerification(emptyIbVerification);
@@ -602,6 +613,8 @@ export default function AdminUserTradingAccountsPage({
         expertAdvisorId: Number(values.expertAdvisorId),
         recurringPrice: values.recurringPrice.trim(),
         currency: values.currency,
+        status: Number(values.status),
+        endDate: values.endDate || null,
         ibVerificationToken: ibVerification.token || undefined,
       });
       handleDialogChange(false);
@@ -704,6 +717,35 @@ export default function AdminUserTradingAccountsPage({
       );
     } finally {
       setRuntimeAction(null);
+    }
+  };
+
+  const handleSendReadyNotification = async (
+    account: TradingAccountItem,
+  ) => {
+    setNotifyingAccountId(account.id);
+
+    try {
+      const response = await sendReadyNotification.mutateAsync({
+        userId,
+        accountId: account.id,
+      });
+      const recipient = (response?.data as { email?: string } | undefined)
+        ?.email;
+
+      toast.success(
+        recipient
+          ? `Deployment notification sent to ${recipient}.`
+          : "Deployment notification sent successfully.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to send deployment notification.",
+      );
+    } finally {
+      setNotifyingAccountId(null);
     }
   };
 
@@ -948,6 +990,32 @@ export default function AdminUserTradingAccountsPage({
                             <Rocket className="h-3.5 w-3.5" />
                           )}
                           Deploy
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          title={
+                            account.eaStatus === 1
+                              ? "Email the user that the robot is ready"
+                              : "The robot must be running before notification"
+                          }
+                          disabled={
+                            account.status !== 1 ||
+                            account.eaStatus !== 1 ||
+                            runtimeAction !== null ||
+                            notifyingAccountId !== null
+                          }
+                          onClick={() =>
+                            void handleSendReadyNotification(account)
+                          }
+                          className="h-7 gap-1 rounded-md border-cyan-200 bg-white px-2 text-xs text-cyan-700 hover:bg-cyan-50 hover:text-cyan-700"
+                        >
+                          {notifyingAccountId === account.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Mail className="h-3.5 w-3.5" />
+                          )}
+                          Notify User
                         </Button>
                         <Button
                           type="button"
@@ -1549,6 +1617,107 @@ export default function AdminUserTradingAccountsPage({
                   )}
                 </label>
               </div>
+
+              <label className="block space-y-2.5">
+                <span className="text-sm font-medium text-gray-700">
+                  Status
+                </span>
+                <Controller
+                  control={createTradingAccountForm.control}
+                  name="status"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className={adminSelectTriggerClass}>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent className={adminSelectContentClass}>
+                        {statusOptions.map((status) => (
+                          <SelectItem
+                            key={status.value}
+                            value={status.value}
+                            className={adminSelectItemClass}
+                          >
+                            {status.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {createTradingAccountForm.formState.errors.status && (
+                  <span className="text-xs text-red-600">
+                    {createTradingAccountForm.formState.errors.status.message}
+                  </span>
+                )}
+              </label>
+
+              <label className="block space-y-2.5">
+                <span className="text-sm font-medium text-gray-700">
+                  Subscription End Date
+                </span>
+                <Controller
+                  control={createTradingAccountForm.control}
+                  name="endDate"
+                  render={({ field }) => {
+                    const selectedDate = parseDateInputValue(field.value);
+
+                    return (
+                      <div className="flex min-w-0 gap-2">
+                        <Popover
+                          open={openCreateEndDatePicker}
+                          onOpenChange={setOpenCreateEndDatePicker}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={`h-9 min-w-0 flex-1 justify-start gap-2 rounded-md border-slate-200 bg-white text-left text-sm font-normal text-gray-900 shadow-none focus-visible:border-blue-300 focus-visible:ring-3 focus-visible:ring-blue-100 ${
+                                field.value ? "" : "text-gray-400"
+                              }`}
+                            >
+                              <CalendarIcon className="h-4 w-4 shrink-0 text-gray-400" />
+                              <span className="min-w-0 truncate">
+                                {selectedDate
+                                  ? format(selectedDate, "dd MMM yyyy")
+                                  : "Select end date"}
+                              </span>
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="start"
+                            className="z-[100] w-auto border-slate-200 bg-white p-0 text-gray-900"
+                          >
+                            <Calendar
+                              mode="single"
+                              selected={selectedDate}
+                              onSelect={(date) => {
+                                field.onChange(
+                                  date ? formatDateInputValue(date) : "",
+                                );
+                                if (date) setOpenCreateEndDatePicker(false);
+                              }}
+                              captionLayout="dropdown"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => field.onChange("")}
+                          className="h-9 shrink-0 border-gray-300 bg-white px-3 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700"
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    );
+                  }}
+                />
+                {createTradingAccountForm.formState.errors.endDate && (
+                  <span className="text-xs text-red-600">
+                    {createTradingAccountForm.formState.errors.endDate.message}
+                  </span>
+                )}
+              </label>
 
               </>
               )}

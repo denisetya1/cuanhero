@@ -852,14 +852,14 @@ export default function MemberHomeDashboard({
     return (
       <label key={name} className="space-y-2">
         <span className="text-sm text-ch-muted">{meta.label}</span>
-        <div className="flex min-w-0">
+        <div className={meta.type === "time" ? "min-w-0" : "flex min-w-0"}>
           <div className="relative min-w-0 flex-1">
             <Input
               id={inputId}
               type={meta.type}
               step={meta.type === "time" ? 1 : meta.step || "1"}
               {...configForm.register(name)}
-              className={`${inputClass} ${meta.type === "time" ? "pr-10 [&::-webkit-calendar-picker-indicator]:opacity-0" : ""} ${suffix ? "rounded-r-none" : ""}`}
+              className={`${inputClass} ${meta.type === "time" ? "pr-28 [&::-webkit-calendar-picker-indicator]:hidden" : ""} ${suffix && meta.type !== "time" ? "rounded-r-none" : ""}`}
             />
             {meta.type === "time" && (
               <button
@@ -885,13 +885,18 @@ export default function MemberHomeDashboard({
                     input.click();
                   }
                 }}
-                className="absolute top-1/2 right-0 z-10 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center text-cyan-300 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
+                className="absolute top-1/2 right-20 z-20 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center text-cyan-300 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
               >
                 <ChevronDown className="h-4 w-4" />
               </button>
             )}
+            {meta.type === "time" && (
+              <span className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-20 items-center justify-center rounded-r-lg border-l border-cyan-400/20 bg-cyan-950/70 px-2 text-xs font-medium whitespace-nowrap text-cyan-200">
+                {utcOffsetLabel}
+              </span>
+            )}
           </div>
-          {suffix && (
+          {suffix && meta.type !== "time" && (
             <span className="flex h-11 shrink-0 items-center rounded-r-lg border border-l-0 border-cyan-400/20 bg-cyan-950/40 px-3 text-xs font-medium text-cyan-200">
               {suffix}
             </span>

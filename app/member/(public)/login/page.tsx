@@ -3,14 +3,23 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import LoginForm from "../../components/LoginForm";
+import { sanitizeMemberRedirect } from "@/lib/member-redirect";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ref?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const redirectTo = sanitizeMemberRedirect(
+    Array.isArray(params.ref) ? params.ref[0] : params.ref,
+  );
   const session = await auth.api.getSession({
     headers: await headers(),
   });
 
   if (session) {
-    redirect("/member/home");
+    redirect(redirectTo);
   }
 
   return (
@@ -33,7 +42,7 @@ export default async function LoginPage() {
           </div>
 
           <div className="rounded-2xl border border-cyan-400/25 bg-[linear-gradient(145deg,rgba(7,18,37,0.92),rgba(4,8,20,0.96))] p-6 shadow-[0_0_0_1px_rgba(0,217,255,0.08),0_18px_55px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-            <LoginForm />
+            <LoginForm redirectTo={redirectTo} />
           </div>
         </div>
       </div>

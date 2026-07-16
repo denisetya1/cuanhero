@@ -177,6 +177,8 @@ export const POST = async (
   const currency = String(body.currency || "")
     .trim()
     .toUpperCase();
+  const status = Number(body.status);
+  const endDate = body.endDate ? String(body.endDate).trim() : "";
   const ibVerificationToken = String(body.ibVerificationToken || "");
   const allowedCurrencies = ["IDR", "USD", "MYR", "SGD"];
   const recurringPriceNumber = Number(recurringPrice);
@@ -202,6 +204,22 @@ export const POST = async (
     return buildErrorResponse(
       "VALIDATION_ERROR",
       "Currency must be IDR, USD, MYR, or SGD.",
+      [],
+    );
+  }
+
+  if (![0, 1, 2].includes(status)) {
+    return buildErrorResponse(
+      "VALIDATION_ERROR",
+      "Status must be inactive, active, or suspended.",
+      [],
+    );
+  }
+
+  if (endDate && Number.isNaN(Date.parse(`${endDate}T00:00:00.000Z`))) {
+    return buildErrorResponse(
+      "VALIDATION_ERROR",
+      "Subscription end date must be a valid date.",
       [],
     );
   }
@@ -322,8 +340,9 @@ export const POST = async (
           }),
           recurringPrice,
           currency,
-          status: 0,
+          status,
           eaStatus: 0,
+          endDate: endDate ? new Date(`${endDate}T00:00:00.000Z`) : null,
           createdBy: session.user.id,
         },
         select: {

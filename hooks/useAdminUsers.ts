@@ -24,6 +24,8 @@ export type AdminTradingAccountPayload = {
   expertAdvisorId: number;
   recurringPrice: string;
   currency: string;
+  status: number;
+  endDate?: string | null;
   ibVerificationToken?: string;
 };
 
@@ -52,6 +54,11 @@ export type AdminTradingAccountConfigPayload = {
   userId: string;
   accountId: number;
   configuration: Record<string, unknown>;
+};
+
+export type AdminTradingAccountReadyNotificationPayload = {
+  userId: string;
+  accountId: number;
 };
 
 export const useGetAdminUsers = () => {
@@ -97,6 +104,8 @@ export const useCreateAdminTradingAccount = () => {
             expertAdvisorId: payload.expertAdvisorId,
             recurringPrice: payload.recurringPrice,
             currency: payload.currency,
+            status: payload.status,
+            endDate: payload.endDate,
             ibVerificationToken: payload.ibVerificationToken,
           }),
         },
@@ -114,6 +123,25 @@ export const useVerifyAdminTradingAccountIb = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }).then(handleRes);
+    },
+  });
+};
+
+export const useSendAdminTradingAccountReadyNotification = () => {
+  return useMutation({
+    mutationKey: ["send-admin-trading-account-ready-notification"],
+    mutationFn: async ({
+      userId,
+      accountId,
+    }: AdminTradingAccountReadyNotificationPayload) => {
+      return fetch(
+        `/api/admin/users/${userId}/trading-accounts/ready-notification`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId }),
+        },
+      ).then(handleRes);
     },
   });
 };
