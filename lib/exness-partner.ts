@@ -104,8 +104,10 @@ const getRequiredEnv = (name: string) => {
   return value;
 };
 
-const resolveAccountsUrl = (accountId: string) => {
-  const configuredUrl = getRequiredEnv("EXNESS_CLIENT_ACCOUNTS_URL");
+const resolveAccountsUrl = (accountId: string, apiBaseUrl: string) => {
+  const configuredUrl =
+    process.env.EXNESS_CLIENT_ACCOUNTS_URL?.trim() ||
+    `${apiBaseUrl}/api/reports/clients/accounts/`;
   const replacedUrl = configuredUrl.replaceAll(
     "{accountId}",
     encodeURIComponent(accountId),
@@ -169,14 +171,17 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
     );
   }
 
-  const accountsResponse = await fetch(resolveAccountsUrl(accountId), {
-    headers: {
-      Accept: "application/json",
-      Authorization: `JWT ${token}`,
+  const accountsResponse = await fetch(
+    resolveAccountsUrl(accountId, apiBaseUrl),
+    {
+      headers: {
+        Accept: "application/json",
+        Authorization: `JWT ${token}`,
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
     },
-    cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
-  });
+  );
   const accountsBody = await readJson(accountsResponse);
 
   if (!accountsResponse.ok) {

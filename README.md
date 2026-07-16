@@ -77,26 +77,25 @@ these server-only variables:
 ```env
 EXNESS_PARTNER_EMAIL=partner@example.com
 EXNESS_PARTNER_PASSWORD=your-partner-password
-EXNESS_AUTH_URL=https://my.exnessaffiliates.com/api/auth/
-EXNESS_AUTH_LOGIN_FIELD=email
-EXNESS_CLIENT_ACCOUNTS_URL=https://my.exnessaffiliates.com/api/your-client-accounts-endpoint/{accountId}
+EXNESS_AUTH_URL=https://my.exnessaffiliates.com/api/v2/auth/
+EXNESS_AUTH_LOGIN_FIELD=login
+EXNESS_CLIENT_ACCOUNTS_URL=https://my.exnessaffiliates.com/api/reports/clients/accounts/
+EXNESS_ACCOUNT_QUERY_PARAM=client_account
 EXNESS_PARTNER_CODE=your-partner-code
 IB_VERIFICATION_SECRET=a-long-random-secret
 ```
 
-Copy the exact Client Accounts endpoint from the Exness Partnership API schema.
-Use `{accountId}` in the URL when the endpoint accepts the account in its path.
-If it uses a query parameter, omit the placeholder and optionally set
-`EXNESS_ACCOUNT_QUERY_PARAM` (the default is `client_account`).
+The verification request calls the Client Accounts report with
+`client_account=<MT5 login>`. `EXNESS_CLIENT_ACCOUNTS_URL` and
+`EXNESS_ACCOUNT_QUERY_PARAM` are optional overrides; the values above are the
+application defaults.
 `EXNESS_PARTNER_CODE` is optional when the report only returns clients assigned
 to the authenticated partner. The verification token is valid for 15 minutes
 and is checked again by the create-account API.
 
-For the v2 endpoint, set
-`EXNESS_AUTH_URL=https://my.exnessaffiliates.com/api/v2/auth/`. The application
-defaults to the `login` request field for v2 and `email` for the legacy
-endpoint. Use `EXNESS_AUTH_LOGIN_FIELD` to override this when required by the
-live Swagger schema.
+The application defaults to the `login` request field for v2 and `email` for
+the legacy endpoint. Use `EXNESS_AUTH_LOGIN_FIELD` to override this when
+required by the live Swagger schema.
 
 ## Subscription renewal cron
 
