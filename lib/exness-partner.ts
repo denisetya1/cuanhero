@@ -14,10 +14,7 @@ const findAccountRecord = (
 
   for (const item of response.data) {
     const account = asRecord(item);
-    if (
-      account &&
-      String(account.client_account || "").trim() === accountId
-    ) {
+    if (account && String(account.client_account || "").trim() === accountId) {
       return account;
     }
   }
@@ -72,6 +69,7 @@ const resolveAccountsUrl = (accountId: string, apiBaseUrl: string) => {
 
   if (replacedUrl !== configuredUrl) return replacedUrl;
 
+  console.log("replacedUrl", replacedUrl);
   const url = new URL(replacedUrl);
   url.searchParams.set(
     process.env.EXNESS_ACCOUNT_QUERY_PARAM?.trim() || "client_account",
