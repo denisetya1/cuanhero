@@ -7,13 +7,25 @@ import {
   Activity,
   AlertTriangle,
   Loader2,
+  Pause,
+  Play,
+  Power,
   RefreshCw,
+  Rocket,
   Search,
   Stethoscope,
   Wifi,
   WifiOff,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -43,6 +55,7 @@ type TradingAccount = {
 };
 
 type Health = "online" | "warning" | "offline" | "inactive";
+type RuntimeAction = "deploy" | "pause" | "resume" | "terminate" | "health";
 const WARNING_AFTER_MS = 5 * 60 * 1000;
 const OFFLINE_AFTER_MS = 15 * 60 * 1000;
 
@@ -80,14 +93,17 @@ export default function AdminTradingAccountsPage({
   const { data, isLoading, isError, error, isFetching, refetch, dataUpdatedAt } =
     useGetAdminTradingAccounts();
   const { data: serversResponse } = useGetAdminServers();
-  const checkTradingAccountHealth = useManageAdminTradingAccountRuntime();
+  const manageTradingAccountRuntime = useManageAdminTradingAccountRuntime();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | Health>("all");
   const serverId = initialServerId;
   const [page, setPage] = useState(1);
-  const [checkingAccountId, setCheckingAccountId] = useState<number | null>(
-    null,
-  );
+  const [runtimeAction, setRuntimeAction] = useState<{
+    accountId: number;
+    action: RuntimeAction;
+  } | null>(null);
+  const [terminateAccount, setTerminateAccount] =
+    useState<TradingAccount | null>(null);
   const [mountedAt] = useState(() => Date.now());
   const accounts = useMemo(
     () => (data?.data || []) as TradingAccount[],
@@ -161,10 +177,10 @@ export default function AdminTradingAccountsPage({
   };
 
   const handleCheckHealth = async (account: TradingAccount) => {
-    setCheckingAccountId(account.id);
+    setRuntimeAction({ accountId: account.id, action: "health" });
 
     try {
-      const response = await checkTradingAccountHealth.mutateAsync({
+      const response = await manageTradingAccountRuntime.mutateAsync({
         userId: account.user.id,
         tradingAccountId: account.id,
         action: "health",
@@ -188,7 +204,41 @@ export default function AdminTradingAccountsPage({
           : `Healthcheck ${account.accountId} gagal.`,
       );
     } finally {
-      setCheckingAccountId(null);
+      setRuntimeAction(null);
+    }
+  };
+
+  const handleRuntimeAction = async (
+    account: TradingAccount,
+    action: Exclude<RuntimeAction, "health">,
+  ) => {
+    setRuntimeAction({ accountId: account.id, action });
+
+    try {
+      await manageTradingAccountRuntime.mutateAsync({
+        userId: account.user.id,
+        tradingAccountId: account.id,
+        action,
+      });
+
+      toast.success(
+        action === "deploy"
+          ? "Deployment bot sedang diproses."
+          : action === "pause"
+            ? "Bot berhasil dipause."
+            : action === "resume"
+              ? "Bot sedang di-resume."
+              : "Bot dan instance berhasil diterminate.",
+      );
+      await refetch();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Runtime action gagal dijalankan.",
+      );
+    } finally {
+      setRuntimeAction(null);
     }
   };
 
@@ -264,20 +314,82 @@ export default function AdminTradingAccountsPage({
                     <td className="whitespace-nowrap px-5 py-4"><p className="text-slate-700">{formatLastSync(account.lastSync)}</p><p className="text-xs text-slate-400">EA status: {account.eaStatus}</p></td>
                     <td className="px-5 py-4"><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${meta.className}`}><Icon className="h-3.5 w-3.5" />{meta.label}</span></td>
                     <td className="px-5 py-4">
-                      <div className="flex min-w-40 flex-wrap items-center gap-2">
+                      <div className="flex min-w-72 flex-wrap items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => void handleCheckHealth(account)}
-                          disabled={checkingAccountId !== null}
+                          disabled={runtimeAction !== null}
                           className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {checkingAccountId === account.id ? (
+                          {runtimeAction?.accountId === account.id &&
+                          runtimeAction.action === "health" ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <Stethoscope className="h-3.5 w-3.5" />
                           )}
                           Check Health
                         </button>
+                        <Button
+                          type="button"
+                          title="Deploy bot"
+                          disabled={account.status !== 1 || runtimeAction !== null}
+                          onClick={() => void handleRuntimeAction(account, "deploy")}
+                          className="h-7 gap-1 rounded-md bg-emerald-600 px-2 text-xs text-white hover:bg-emerald-700"
+                        >
+                          {runtimeAction?.accountId === account.id &&
+                          runtimeAction.action === "deploy" ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Rocket className="h-3.5 w-3.5" />
+                          )}
+                          Deploy
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          title={account.eaStatus === 2 ? "Resume bot" : "Pause bot"}
+                          disabled={
+                            runtimeAction !== null ||
+                            ![1, 2].includes(account.eaStatus)
+                          }
+                          onClick={() =>
+                            void handleRuntimeAction(
+                              account,
+                              account.eaStatus === 2 ? "resume" : "pause",
+                            )
+                          }
+                          className={
+                            account.eaStatus === 2
+                              ? "h-7 gap-1 rounded-md border-blue-200 bg-white px-2 text-xs text-blue-700 hover:bg-blue-50 hover:text-blue-700"
+                              : "h-7 gap-1 rounded-md border-amber-200 bg-white px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-700"
+                          }
+                        >
+                          {runtimeAction?.accountId === account.id &&
+                          ["pause", "resume"].includes(runtimeAction.action) ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : account.eaStatus === 2 ? (
+                            <Play className="h-3.5 w-3.5" />
+                          ) : (
+                            <Pause className="h-3.5 w-3.5" />
+                          )}
+                          {account.eaStatus === 2 ? "Resume" : "Pause"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          title="Terminate bot and delete instance"
+                          disabled={runtimeAction !== null}
+                          onClick={() => setTerminateAccount(account)}
+                          className="h-7 gap-1 rounded-md border-red-200 bg-white px-2 text-xs text-red-700 hover:bg-red-50 hover:text-red-700"
+                        >
+                          {runtimeAction?.accountId === account.id &&
+                          runtimeAction.action === "terminate" ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Power className="h-3.5 w-3.5" />
+                          )}
+                          Terminate
+                        </Button>
                         <Link href={`/admin/users/${account.user.id}/trading-accounts`} className="text-xs font-semibold text-blue-600 hover:text-blue-800">View account</Link>
                       </div>
                     </td>
@@ -288,6 +400,59 @@ export default function AdminTradingAccountsPage({
         </div>
         <AdminTablePagination currentPage={safePage} totalItems={filtered.length} onPageChange={setPage} />
       </section>
+
+      <Dialog
+        open={terminateAccount !== null}
+        onOpenChange={(open) => {
+          if (!open && runtimeAction === null) setTerminateAccount(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="overflow-hidden rounded-md border border-slate-200 bg-white p-0 text-gray-900 shadow-xl sm:max-w-md"
+        >
+          <DialogHeader className="border-b border-gray-100 bg-gray-50 px-5 py-4">
+            <DialogTitle>Terminate Trading Account</DialogTitle>
+            <DialogDescription>
+              Konfirmasi penghapusan instance MT5 dari VPS.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-5 py-5">
+            <div className="rounded-md border border-red-100 bg-red-50 p-4">
+              <p className="text-sm font-semibold text-gray-900">
+                Terminate {terminateAccount?.accountName || terminateAccount?.accountId}?
+              </p>
+              <p className="mt-1 text-sm leading-5 text-gray-600">
+                Bot akan dihentikan dan seluruh instance MT5 account ini akan
+                dihapus dari VPS. Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={runtimeAction !== null}
+              onClick={() => setTerminateAccount(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!terminateAccount || runtimeAction !== null}
+              onClick={() => {
+                if (!terminateAccount) return;
+                const account = terminateAccount;
+                setTerminateAccount(null);
+                void handleRuntimeAction(account, "terminate");
+              }}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Terminate Instance
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

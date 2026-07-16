@@ -577,7 +577,6 @@ export default function MemberHomeDashboard({
   const accountQuery = searchParams.get("account");
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const [isConfigDirty, setIsConfigDirty] = useState(false);
   const tradingAccounts: TradingAccount[] = useMemo(
     () =>
       ((data?.data || []) as TradingAccount[]).filter(
@@ -696,6 +695,7 @@ export default function MemberHomeDashboard({
     resolver: zodResolver(memberConfigSchema),
     defaultValues: getMemberConfigDefaultValues(config),
   });
+  const isConfigDirty = configForm.formState.isDirty;
 
   useEffect(() => {
     configForm.reset(getMemberConfigDefaultValues(config));
@@ -712,8 +712,8 @@ export default function MemberHomeDashboard({
       getMemberConfigDefaultValues(
         parseConfig(defaultConfig, timeZoneOffsetMinutes),
       ),
+      { keepDefaultValues: true },
     );
-    setIsConfigDirty(true);
     setSaveMessage(
       "Default EA configuration loaded. Save changes to apply it.",
     );
@@ -794,9 +794,10 @@ export default function MemberHomeDashboard({
     }
 
     await queryClient.invalidateQueries({ queryKey: ["trading-accounts"] });
+    // Make the successfully saved values the new dirty-state baseline.
+    configForm.reset(values);
     setSaveMessage("Bot configuration saved successfully.");
     toast.success("Bot configuration saved successfully.");
-    setIsConfigDirty(false);
     setIsSaving(false);
   };
 
@@ -821,7 +822,6 @@ export default function MemberHomeDashboard({
                 checked={field.value === true}
                 onCheckedChange={(checked) => {
                   field.onChange(checked);
-                  setIsConfigDirty(true);
                   setSaveMessage("");
                 }}
               />
@@ -976,7 +976,6 @@ export default function MemberHomeDashboard({
                 (item) => item.accountId === value,
               );
               if (account) {
-                setIsConfigDirty(false);
                 setSaveMessage("");
 
                 const params = new URLSearchParams(searchParamsString);
@@ -1057,10 +1056,7 @@ export default function MemberHomeDashboard({
       <form
         key={selectedAccount?.id || "empty"}
         onSubmit={configForm.handleSubmit(handleSaveConfig)}
-        onChange={() => {
-          setIsConfigDirty(true);
-          setSaveMessage("");
-        }}
+        onChange={() => setSaveMessage("")}
         className="grid gap-5"
       >
         <section className={cardClass}>
