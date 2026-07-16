@@ -99,6 +99,7 @@ export const POST = async (req: NextRequest) => {
       verificationToken: verification.token,
       expiresAt: verification.expiresAt,
       partnerCode: result.partnerCode,
+      accountType: result.accountType,
     });
   } catch (error) {
     console.error("VERIFY_EXNESS_IB_ERROR:", error);

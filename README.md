@@ -81,7 +81,6 @@ EXNESS_AUTH_URL=https://my.exnessaffiliates.com/api/v2/auth/
 EXNESS_AUTH_LOGIN_FIELD=login
 EXNESS_CLIENT_ACCOUNTS_URL=https://my.exnessaffiliates.com/api/reports/clients/accounts/
 EXNESS_ACCOUNT_QUERY_PARAM=client_account
-EXNESS_PARTNER_CODE=your-partner-code
 IB_VERIFICATION_SECRET=a-long-random-secret
 ```
 
@@ -89,9 +88,11 @@ The verification request calls the Client Accounts report with
 `client_account=<MT5 login>`. `EXNESS_CLIENT_ACCOUNTS_URL` and
 `EXNESS_ACCOUNT_QUERY_PARAM` are optional overrides; the values above are the
 application defaults.
-`EXNESS_PARTNER_CODE` is optional when the report only returns clients assigned
-to the authenticated partner. The verification token is valid for 15 minutes
-and is checked again by the create-account API.
+Because this report is scoped to the authenticated Partner account, a row whose
+`client_account` matches the MT5 login is considered verified. Its
+`partner_code` is returned as metadata and is not restricted to one code. The
+verification token is valid for 15 minutes and is checked again by the
+create-account API.
 
 The application defaults to the `login` request field for v2 and `email` for
 the legacy endpoint. Use `EXNESS_AUTH_LOGIN_FIELD` to override this when

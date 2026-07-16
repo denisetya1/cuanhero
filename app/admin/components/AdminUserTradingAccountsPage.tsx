@@ -428,7 +428,7 @@ export default function AdminUserTradingAccountsPage({
         packageId,
       });
       const result = response?.data as
-        | { verificationToken?: string }
+        | { verificationToken?: string; accountType?: string | null }
         | undefined;
 
       if (!result?.verificationToken) {
@@ -438,7 +438,13 @@ export default function AdminUserTradingAccountsPage({
       setIbVerification({
         status: "verified",
         token: result.verificationToken,
-        message: "Verified under the configured Exness IB.",
+        message: result.accountType
+          ? `Verified under the configured Exness IB. Account type: ${result.accountType}.${
+              result.accountType.toLowerCase() === "standard cent"
+                ? ""
+                : " Please use a Standard Cent account."
+            }`
+          : "Verified under the configured Exness IB. Account type was not provided by Exness.",
       });
     } catch (error) {
       setIbVerification({

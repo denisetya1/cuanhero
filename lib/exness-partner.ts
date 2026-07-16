@@ -1,68 +1,25 @@
 type JsonRecord = Record<string, unknown>;
 
-const ACCOUNT_ID_FIELDS = new Set([
-  "account",
-  "account_id",
-  "accountid",
-  "client_account",
-  "clientaccount",
-  "trading_account",
-  "tradingaccount",
-  "mt_account",
-  "mtaccount",
-  "login",
-]);
-
-const PARTNER_CODE_FIELDS = new Set([
-  "partner_code",
-  "partnercode",
-  "affiliate_code",
-  "affiliatecode",
-]);
-
 const asRecord = (value: unknown): JsonRecord | null =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as JsonRecord)
     : null;
 
-const findStringByKeys = (value: unknown, keys: Set<string>): string | null => {
-  const record = asRecord(value);
-  if (!record) return null;
-
-  for (const [key, item] of Object.entries(record)) {
-    if (
-      keys.has(key.toLowerCase()) &&
-      ["string", "number"].includes(typeof item)
-    ) {
-      return String(item);
-    }
-  }
-
-  return null;
-};
-
 const findAccountRecord = (
   value: unknown,
   accountId: string,
 ): JsonRecord | null => {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const match = findAccountRecord(item, accountId);
-      if (match) return match;
+  const response = asRecord(value);
+  if (!response || !Array.isArray(response.data)) return null;
+
+  for (const item of response.data) {
+    const account = asRecord(item);
+    if (
+      account &&
+      String(account.client_account || "").trim() === accountId
+    ) {
+      return account;
     }
-    return null;
-  }
-
-  const record = asRecord(value);
-  if (!record) return null;
-
-  if (findStringByKeys(record, ACCOUNT_ID_FIELDS) === accountId) {
-    return record;
-  }
-
-  for (const item of Object.values(record)) {
-    const match = findAccountRecord(item, accountId);
-    if (match) return match;
   }
 
   return null;
@@ -120,7 +77,6 @@ const resolveAccountsUrl = (accountId: string, apiBaseUrl: string) => {
     process.env.EXNESS_ACCOUNT_QUERY_PARAM?.trim() || "client_account",
     accountId,
   );
-  console.log("UUDD:", url.toString());
   return url.toString();
 };
 
@@ -152,6 +108,7 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
     // A redirect can turn POST into GET and surface as a misleading HTTP 405.
     redirect: "manual",
   });
+
   const authBody = await readJson(authResponse);
   const authRecord = asRecord(authBody);
   const token =
@@ -193,15 +150,22 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
 
   const account = findAccountRecord(accountsBody, accountId);
   if (!account) {
-    return { verified: false as const, partnerCode: null };
+    return {
+      verified: false as const,
+      partnerCode: null,
+      accountType: null,
+    };
   }
 
-  const partnerCode = findStringByKeys(account, PARTNER_CODE_FIELDS);
-  const expectedPartnerCode = process.env.EXNESS_PARTNER_CODE?.trim();
+  const partnerCode =
+    typeof account.partner_code === "string" ||
+    typeof account.partner_code === "number"
+      ? String(account.partner_code)
+      : null;
+  const accountType =
+    typeof account.client_account_type === "string"
+      ? account.client_account_type.trim() || null
+      : null;
 
-  if (expectedPartnerCode && partnerCode !== expectedPartnerCode) {
-    return { verified: false as const, partnerCode };
-  }
-
-  return { verified: true as const, partnerCode };
+  return { verified: true as const, partnerCode, accountType };
 };
