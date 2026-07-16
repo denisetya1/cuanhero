@@ -134,3 +134,27 @@ curl -X POST https://cuanhero.com/api/cron/subscription-expirations \
 
 If pySync cannot be reached, member access is still disabled immediately and
 the runtime cleanup is retried on the next cron run.
+
+## Runtime healthcheck cron
+
+The healthcheck cron calls the bulk pySync health endpoint for every server,
+updates each server's online status, and synchronizes deployed bot runtime
+status and heartbeat time. It uses the same `CRON_SECRET` as the subscription
+cron endpoints.
+
+Run it every five minutes:
+
+```bash
+curl -X POST https://cuanhero.com/api/cron/healthchecks \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+An unreachable server is marked offline without immediately changing its bot
+statuses, preventing a temporary network failure from being recorded as every
+bot stopping.
+
+Live pySync bot processes whose account ID is missing from the trading accounts
+table or registered to a different server are stored in the
+`runtime_health_issues` table. Repeated detections update the same incident;
+when the process is no longer detected, `resolved_at` is populated. The cron
+only records these processes and does not terminate them automatically.

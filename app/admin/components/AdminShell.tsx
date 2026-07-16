@@ -16,6 +16,7 @@ import {
   Menu,
   Package,
   Server,
+  ShieldAlert,
   Settings,
   Activity,
   Users,
@@ -47,6 +48,7 @@ const menu = [
   { label: "Packages", href: "/admin/packages", icon: Package },
   { label: "EA Robot", href: "/admin/ea", icon: Bot },
   { label: "Server", href: "/admin/server", icon: Server },
+  { label: "Health Reports", href: "/admin/health-reports", icon: ShieldAlert },
   { label: "Pages", href: "/admin/pages", icon: FileText },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];

@@ -197,19 +197,45 @@ model PaymentRecord {
 }
 
 model Server {
-  id              Int              @id @default(autoincrement())
-  name            String?
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at")
-  ipAddress       String           @map("ip_address")
-  domain          String?          @unique
-  createdAt       DateTime         @default(now()) @map("created_at")
-  createdBy       String?          @map("created_by")
-  updatedBy       String?          @map("updated_by")
-  status          Int              @default(0) @db.TinyInt
-  orderNumber     Int              @default(9999) @map("order_number")
-  tradingAccounts TradingAccount[]
+  id                  Int                  @id @default(autoincrement())
+  name                String?
+  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at")
+  ipAddress           String               @map("ip_address")
+  domain              String?              @unique
+  createdAt           DateTime             @default(now()) @map("created_at")
+  createdBy           String?              @map("created_by")
+  updatedBy           String?              @map("updated_by")
+  status              Int                  @default(0) @db.TinyInt
+  orderNumber         Int                  @default(9999) @map("order_number")
+  tradingAccounts     TradingAccount[]
+  runtimeHealthIssues RuntimeHealthIssue[]
 
   @@map("servers")
+}
+
+model RuntimeHealthIssue {
+  id                 Int       @id @default(autoincrement())
+  serverId           Int       @map("server_id")
+  accountId          String    @map("account_id")
+  reason             String
+  registeredServerId Int?      @map("registered_server_id")
+  runtimeStatus      String    @map("runtime_status")
+  isRunning          Boolean   @default(false) @map("is_running")
+  isPaused           Boolean   @default(false) @map("is_paused")
+  pid                Int?
+  lastHeartbeatAt    DateTime? @map("last_heartbeat_at")
+  firstDetectedAt    DateTime  @default(now()) @map("first_detected_at")
+  lastDetectedAt     DateTime  @default(now()) @map("last_detected_at")
+  detectionCount     Int       @default(1) @map("detection_count")
+  resolvedAt         DateTime? @map("resolved_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
+  server             Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, accountId, reason], name: "serverId_accountId_reason", map: "runtime_health_issues_server_account_reason_key")
+  @@index([resolvedAt, lastDetectedAt], map: "runtime_health_issues_resolved_detected_idx")
+  @@index([accountId], map: "runtime_health_issues_account_id_idx")
+  @@map("runtime_health_issues")
 }
 
 model AppSetting {
@@ -221,8 +247,8 @@ model AppSetting {
   metaDescriptionId     String   @map("meta_description_id") @db.Text
   orderMessageEn        String   @map("order_message_en") @db.Text
   orderMessageId        String   @map("order_message_id") @db.Text
-  freeTrialMessageEn    String?   @map("free_trial_message_en") @db.Text
-  freeTrialMessageId    String?   @map("free_trial_message_id") @db.Text
+  freeTrialMessageEn    String?  @map("free_trial_message_en") @db.Text
+  freeTrialMessageId    String?  @map("free_trial_message_id") @db.Text
   renewalMessageEn      String   @map("renewal_message_en") @db.Text
   renewalMessageId      String   @map("renewal_message_id") @db.Text
   consultationMessageEn String   @map("consultation_message_en") @db.Text
