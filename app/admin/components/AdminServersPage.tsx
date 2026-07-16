@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,6 +9,7 @@ import { toast } from "react-toastify";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
+  ListFilter,
   Pencil,
   Plus,
   Search,
@@ -525,6 +527,20 @@ export default function AdminServersPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          asChild
+                          type="button"
+                          variant="outline"
+                          title="View trading accounts on this server"
+                          className="h-7 gap-1 rounded-md border-slate-200 bg-white px-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                        >
+                          <Link
+                            href={`/admin/trading-accounts?serverId=${server.id}`}
+                          >
+                            <ListFilter className="h-3.5 w-3.5" />
+                            View Accounts
+                          </Link>
+                        </Button>
                         <Button
                           type="button"
                           variant="outline"

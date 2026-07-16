@@ -38,7 +38,7 @@ export const GET = async () => {
       lastSync: true,
       endDate: true,
       user: { select: { id: true, name: true, email: true } },
-      server: { select: { name: true } },
+      server: { select: { id: true, name: true } },
       package: { select: { name: true } },
       expertAdvisor: { select: { name: true } },
     },

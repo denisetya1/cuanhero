@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   Activity,
@@ -14,6 +15,14 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useGetAdminServers } from "@/hooks/useAdminServers";
 import { useGetAdminTradingAccounts } from "@/hooks/useAdminTradingAccounts";
 import { useManageAdminTradingAccountRuntime } from "@/hooks/useAdminUsers";
 import AdminTablePagination, { DEFAULT_TABLE_PAGE_SIZE } from "./AdminTablePagination";
@@ -28,7 +37,7 @@ type TradingAccount = {
   lastSync?: string | null;
   endDate?: string | null;
   user: { id: string; name: string; email: string };
-  server?: { name: string } | null;
+  server?: { id: number; name: string | null } | null;
   package?: { name: string } | null;
   expertAdvisor?: { name: string } | null;
 };
@@ -61,12 +70,20 @@ const formatLastSync = (value?: string | null) => {
   }).format(new Date(value));
 };
 
-export default function AdminTradingAccountsPage() {
+export default function AdminTradingAccountsPage({
+  initialServerId = "all",
+}: {
+  initialServerId?: string;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
   const { data, isLoading, isError, error, isFetching, refetch, dataUpdatedAt } =
     useGetAdminTradingAccounts();
+  const { data: serversResponse } = useGetAdminServers();
   const checkTradingAccountHealth = useManageAdminTradingAccountRuntime();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | Health>("all");
+  const serverId = initialServerId;
   const [page, setPage] = useState(1);
   const [checkingAccountId, setCheckingAccountId] = useState<number | null>(
     null,
@@ -77,10 +94,29 @@ export default function AdminTradingAccountsPage() {
     [data?.data],
   );
   const now = dataUpdatedAt || mountedAt;
+  const servers = useMemo(
+    () =>
+      [
+        ...((serversResponse?.data || []) as Array<{
+          id: number;
+          name?: string | null;
+        }>),
+      ].sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+    [serversResponse?.data],
+  );
+  const serverAccounts = useMemo(
+    () =>
+      serverId === "all"
+        ? accounts
+        : accounts.filter((account) =>
+            account.server?.id === Number(serverId),
+          ),
+    [accounts, serverId],
+  );
 
   const counts = useMemo(
     () =>
-      accounts.reduce(
+      serverAccounts.reduce(
         (result, account) => {
           result[getHealth(account, now)] += 1;
           return result;
@@ -90,30 +126,39 @@ export default function AdminTradingAccountsPage() {
           number
         >,
       ),
-    [accounts, now],
+    [now, serverAccounts],
   );
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return accounts.filter((account) => {
+    return serverAccounts.filter((account) => {
       const matchesHealth = filter === "all" || getHealth(account, now) === filter;
       const matchesSearch = !needle || [account.accountId, account.accountName, account.user.name, account.user.email, account.server?.name]
         .some((value) => value?.toLowerCase().includes(needle));
       return matchesHealth && matchesSearch;
     });
-  }, [accounts, filter, now, search]);
+  }, [filter, now, search, serverAccounts]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / DEFAULT_TABLE_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * DEFAULT_TABLE_PAGE_SIZE, safePage * DEFAULT_TABLE_PAGE_SIZE);
 
   const filters: Array<{ key: "all" | Health; label: string; count: number }> = [
-    { key: "all", label: "All", count: accounts.length },
+    { key: "all", label: "All", count: serverAccounts.length },
     { key: "offline", label: "Offline", count: counts.offline },
     { key: "warning", label: "Delayed", count: counts.warning },
     { key: "online", label: "Online", count: counts.online },
     { key: "inactive", label: "Inactive", count: counts.inactive },
   ];
+
+  const handleServerChange = (value: string) => {
+    setPage(1);
+
+    router.replace(
+      value === "all" ? pathname : `${pathname}?serverId=${value}`,
+      { scroll: false },
+    );
+  };
 
   const handleCheckHealth = async (account: TradingAccount) => {
     setCheckingAccountId(account.id);
@@ -185,7 +230,22 @@ export default function AdminTradingAccountsPage() {
 
       <section className="overflow-hidden rounded-md border border-gray-100 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
-          <div className="relative w-full sm:w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search account, user, or server..." className="pl-9" /></div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Select value={serverId} onValueChange={handleServerChange}>
+              <SelectTrigger className="w-full border-slate-200 bg-white sm:w-56">
+                <SelectValue placeholder="Filter server" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All servers</SelectItem>
+                {servers.map((server) => (
+                  <SelectItem key={server.id} value={String(server.id)}>
+                    {server.name || `Server #${server.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative w-full sm:w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search account, user, or server..." className="pl-9" /></div>
+          </div>
           <div className="flex flex-wrap gap-2">{filters.map((item) => <button key={item.key} onClick={() => { setFilter(item.key); setPage(1); }} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${filter === item.key ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>{item.label} ({item.count})</button>)}</div>
         </div>
         <div className="overflow-x-auto">
