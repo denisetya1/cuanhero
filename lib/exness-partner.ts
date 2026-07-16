@@ -25,10 +25,7 @@ const asRecord = (value: unknown): JsonRecord | null =>
     ? (value as JsonRecord)
     : null;
 
-const findStringByKeys = (
-  value: unknown,
-  keys: Set<string>,
-): string | null => {
+const findStringByKeys = (value: unknown, keys: Set<string>): string | null => {
   const record = asRecord(value);
   if (!record) return null;
 
@@ -107,14 +104,14 @@ const resolveAccountsUrl = (accountId: string) => {
 
 export const verifyExnessPartnerAccount = async (accountId: string) => {
   const apiBaseUrl = (
-    process.env.EXNESS_PARTNER_API_BASE_URL ||
-    "https://my.exnessaffiliates.com"
+    process.env.EXNESS_PARTNER_API_BASE_URL || "https://my.exnessaffiliates.com"
   ).replace(/\/$/, "");
   const email = getRequiredEnv("EXNESS_PARTNER_EMAIL");
   const password = getRequiredEnv("EXNESS_PARTNER_PASSWORD");
   const authUrl =
-    process.env.EXNESS_AUTH_URL?.trim() || `${apiBaseUrl}/api/auth/`;
+    process.env.EXNESS_AUTH_URL?.trim() || `${apiBaseUrl}/api/v2/auth/`;
 
+  console.log("authUrl", authUrl);
   const authResponse = await fetch(authUrl, {
     method: "POST",
     headers: {
