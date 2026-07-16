@@ -1,6 +1,26 @@
 export const handleRes = async (res: Response) => {
   const text = await res.text();
-  const resJson = text ? JSON.parse(text) : null;
+  let resJson = null;
+
+  if (text) {
+    try {
+      resJson = JSON.parse(text);
+    } catch {
+      const htmlTitle =
+        text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ||
+        text.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1];
+      const responseLabel = htmlTitle
+        ?.replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      throw new Error(
+        `Server returned a non-JSON response (HTTP ${res.status})${
+          responseLabel ? `: ${responseLabel}` : "."
+        }`,
+      );
+    }
+  }
 
   if (res.ok) {
     return resJson;
