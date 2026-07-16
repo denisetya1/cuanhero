@@ -120,6 +120,7 @@ const resolveAccountsUrl = (accountId: string, apiBaseUrl: string) => {
     process.env.EXNESS_ACCOUNT_QUERY_PARAM?.trim() || "client_account",
     accountId,
   );
+  console.log("UUDD:", url.toString());
   return url.toString();
 };
 
