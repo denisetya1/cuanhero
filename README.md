@@ -78,6 +78,7 @@ these server-only variables:
 EXNESS_PARTNER_EMAIL=partner@example.com
 EXNESS_PARTNER_PASSWORD=your-partner-password
 EXNESS_AUTH_URL=https://my.exnessaffiliates.com/api/auth/
+EXNESS_AUTH_LOGIN_FIELD=email
 EXNESS_CLIENT_ACCOUNTS_URL=https://my.exnessaffiliates.com/api/your-client-accounts-endpoint/{accountId}
 EXNESS_PARTNER_CODE=your-partner-code
 IB_VERIFICATION_SECRET=a-long-random-secret
@@ -90,6 +91,12 @@ If it uses a query parameter, omit the placeholder and optionally set
 `EXNESS_PARTNER_CODE` is optional when the report only returns clients assigned
 to the authenticated partner. The verification token is valid for 15 minutes
 and is checked again by the create-account API.
+
+For the v2 endpoint, set
+`EXNESS_AUTH_URL=https://my.exnessaffiliates.com/api/v2/auth/`. The application
+defaults to the `login` request field for v2 and `email` for the legacy
+endpoint. Use `EXNESS_AUTH_LOGIN_FIELD` to override this when required by the
+live Swagger schema.
 
 ## Subscription renewal cron
 

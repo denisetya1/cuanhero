@@ -79,6 +79,25 @@ const readJson = async (response: Response) => {
   }
 };
 
+const describeApiError = (value: unknown) => {
+  if (!value) return "No response body.";
+  if (typeof value === "string") return value.slice(0, 500);
+
+  const record = asRecord(value);
+  if (record) {
+    const directMessage = [record.detail, record.message, record.error].find(
+      (item): item is string => typeof item === "string" && Boolean(item),
+    );
+    if (directMessage) return directMessage.slice(0, 500);
+  }
+
+  try {
+    return JSON.stringify(value).slice(0, 500);
+  } catch {
+    return "Unrecognized response body.";
+  }
+};
+
 const getRequiredEnv = (name: string) => {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is not configured.`);
@@ -110,15 +129,21 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
   const password = getRequiredEnv("EXNESS_PARTNER_PASSWORD");
   const authUrl =
     process.env.EXNESS_AUTH_URL?.trim() || `${apiBaseUrl}/api/v2/auth/`;
+  const configuredLoginField = process.env.EXNESS_AUTH_LOGIN_FIELD?.trim();
+  const loginField =
+    configuredLoginField || (authUrl.includes("/v2/") ? "login" : "email");
 
-  console.log("authUrl", authUrl);
+  if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(loginField)) {
+    throw new Error("EXNESS_AUTH_LOGIN_FIELD contains an invalid field name.");
+  }
+
   const authResponse = await fetch(authUrl, {
     method: "POST",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ [loginField]: email, password }),
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),
     // A redirect can turn POST into GET and surface as a misleading HTTP 405.
@@ -140,7 +165,7 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
 
   if (!authResponse.ok || !token) {
     throw new Error(
-      `Exness authentication failed (HTTP ${authResponse.status}).`,
+      `Exness authentication failed (HTTP ${authResponse.status}, login field: ${loginField}): ${describeApiError(authBody)}`,
     );
   }
 
@@ -156,7 +181,7 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
 
   if (!accountsResponse.ok) {
     throw new Error(
-      `Exness Client Accounts request failed (HTTP ${accountsResponse.status}).`,
+      `Exness Client Accounts request failed (HTTP ${accountsResponse.status}): ${describeApiError(accountsBody)}`,
     );
   }
 
