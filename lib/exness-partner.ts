@@ -1,5 +1,25 @@
 type JsonRecord = Record<string, unknown>;
 
+type ExnessTokenCache = {
+  token: string | null;
+  expiresAt: number;
+  pending: Promise<string> | null;
+};
+
+const globalForExness = globalThis as typeof globalThis & {
+  __exnessTokenCache?: ExnessTokenCache;
+};
+
+// Keep one token per Node.js process, including across Next.js module reloads.
+const tokenCache = (globalForExness.__exnessTokenCache ??= {
+  token: null,
+  expiresAt: 0,
+  pending: null,
+});
+
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+const FALLBACK_TOKEN_LIFETIME_MS = 30 * 60 * 1000;
+
 const asRecord = (value: unknown): JsonRecord | null =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as JsonRecord)
@@ -58,42 +78,38 @@ const getRequiredEnv = (name: string) => {
   return value;
 };
 
-const resolveAccountsUrl = (accountId: string, apiBaseUrl: string) => {
-  const configuredUrl =
-    process.env.EXNESS_CLIENT_ACCOUNTS_URL?.trim() ||
-    `${apiBaseUrl}/api/reports/clients/accounts/`;
-  const replacedUrl = configuredUrl.replaceAll(
-    "{accountId}",
-    encodeURIComponent(accountId),
-  );
+const getJwtExpiresAt = (token: string) => {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return Date.now() + FALLBACK_TOKEN_LIFETIME_MS;
 
-  if (replacedUrl !== configuredUrl) return replacedUrl;
+    const decoded = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as unknown;
+    const record = asRecord(decoded);
+    const expiresAt = Number(record?.exp) * 1000;
 
-  console.log("replacedUrl", replacedUrl);
-  const url = new URL(replacedUrl);
-  url.searchParams.set(
-    process.env.EXNESS_ACCOUNT_QUERY_PARAM?.trim() || "client_account",
-    accountId,
-  );
-  return url.toString();
+    return Number.isFinite(expiresAt) && expiresAt > Date.now()
+      ? expiresAt
+      : Date.now() + FALLBACK_TOKEN_LIFETIME_MS;
+  } catch {
+    return Date.now() + FALLBACK_TOKEN_LIFETIME_MS;
+  }
 };
 
-export const verifyExnessPartnerAccount = async (accountId: string) => {
-  const apiBaseUrl = (
-    process.env.EXNESS_PARTNER_API_BASE_URL || "https://my.exnessaffiliates.com"
-  ).replace(/\/$/, "");
-  const email = getRequiredEnv("EXNESS_PARTNER_EMAIL");
-  const password = getRequiredEnv("EXNESS_PARTNER_PASSWORD");
-  const authUrl =
-    process.env.EXNESS_AUTH_URL?.trim() || `${apiBaseUrl}/api/v2/auth/`;
-  const configuredLoginField = process.env.EXNESS_AUTH_LOGIN_FIELD?.trim();
-  const loginField =
-    configuredLoginField || (authUrl.includes("/v2/") ? "login" : "email");
+type AuthConfig = {
+  authUrl: string;
+  email: string;
+  password: string;
+  loginField: string;
+};
 
-  if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(loginField)) {
-    throw new Error("EXNESS_AUTH_LOGIN_FIELD contains an invalid field name.");
-  }
-
+const requestExnessToken = async ({
+  authUrl,
+  email,
+  password,
+  loginField,
+}: AuthConfig) => {
   const authResponse = await fetch(authUrl, {
     method: "POST",
     headers: {
@@ -127,18 +143,95 @@ export const verifyExnessPartnerAccount = async (accountId: string) => {
     );
   }
 
-  const accountsResponse = await fetch(
-    resolveAccountsUrl(accountId, apiBaseUrl),
-    {
+  tokenCache.token = token;
+  tokenCache.expiresAt = getJwtExpiresAt(token);
+  return token;
+};
+
+const getExnessToken = async (config: AuthConfig, forceRefresh = false) => {
+  if (forceRefresh) {
+    tokenCache.token = null;
+    tokenCache.expiresAt = 0;
+  }
+
+  if (
+    tokenCache.token &&
+    Date.now() < tokenCache.expiresAt - TOKEN_REFRESH_BUFFER_MS
+  ) {
+    return tokenCache.token;
+  }
+
+  // Concurrent verification requests share the same authentication request.
+  if (tokenCache.pending) return tokenCache.pending;
+
+  tokenCache.pending = requestExnessToken(config);
+  try {
+    return await tokenCache.pending;
+  } finally {
+    tokenCache.pending = null;
+  }
+};
+
+const resolveAccountsUrl = (accountId: string, apiBaseUrl: string) => {
+  const configuredUrl =
+    process.env.EXNESS_CLIENT_ACCOUNTS_URL?.trim() ||
+    `${apiBaseUrl}/api/reports/clients/accounts/`;
+  const replacedUrl = configuredUrl.replaceAll(
+    "{accountId}",
+    encodeURIComponent(accountId),
+  );
+
+  if (replacedUrl !== configuredUrl) return replacedUrl;
+
+  const url = new URL(replacedUrl);
+  url.searchParams.set(
+    process.env.EXNESS_ACCOUNT_QUERY_PARAM?.trim() || "client_account",
+    accountId,
+  );
+  return url.toString();
+};
+
+export const verifyExnessPartnerAccount = async (accountId: string) => {
+  const apiBaseUrl = (
+    process.env.EXNESS_PARTNER_API_BASE_URL || "https://my.exnessaffiliates.com"
+  ).replace(/\/$/, "");
+  const email = getRequiredEnv("EXNESS_PARTNER_EMAIL");
+  const password = getRequiredEnv("EXNESS_PARTNER_PASSWORD");
+  const authUrl =
+    process.env.EXNESS_AUTH_URL?.trim() || `${apiBaseUrl}/api/v2/auth/`;
+  const configuredLoginField = process.env.EXNESS_AUTH_LOGIN_FIELD?.trim();
+  const loginField =
+    configuredLoginField || (authUrl.includes("/v2/") ? "login" : "email");
+
+  if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(loginField)) {
+    throw new Error("EXNESS_AUTH_LOGIN_FIELD contains an invalid field name.");
+  }
+
+  const authConfig = { authUrl, email, password, loginField };
+  const accountsUrl = resolveAccountsUrl(accountId, apiBaseUrl);
+  const requestAccounts = async (token: string) => {
+    const response = await fetch(accountsUrl, {
       headers: {
         Accept: "application/json",
         Authorization: `JWT ${token}`,
       },
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
-    },
-  );
-  const accountsBody = await readJson(accountsResponse);
+    });
+
+    return { response, body: await readJson(response) };
+  };
+
+  let token = await getExnessToken(authConfig);
+  let accountsResult = await requestAccounts(token);
+
+  // A revoked or unexpectedly expired token is refreshed and retried only once.
+  if (accountsResult.response.status === 401) {
+    token = await getExnessToken(authConfig, true);
+    accountsResult = await requestAccounts(token);
+  }
+
+  const { response: accountsResponse, body: accountsBody } = accountsResult;
 
   if (!accountsResponse.ok) {
     throw new Error(
