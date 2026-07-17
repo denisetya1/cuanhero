@@ -86,9 +86,35 @@ export const POST = async (req: NextRequest) => {
     });
 
     if (existingServer) {
+      let hostname = existingServer.domain;
+
+      // Server dapat sudah tercatat sebelum konfigurasi Cloudflare tersedia.
+      // Registrasi ulang harus melengkapi domain yang masih kosong, bukan
+      // langsung mengembalikan sukses dengan hostname null.
+      if (!hostname) {
+        const ipVersion = isIP(publicIp);
+        if (ipVersion !== 4 && ipVersion !== 6) {
+          throw new Error("Unsupported public IP address.");
+        }
+
+        hostname = await upsertPySyncDnsRecord(
+          existingServer.id,
+          publicIp,
+          ipVersion,
+        );
+        await prisma.server.update({
+          where: { id: existingServer.id },
+          data: {
+            domain: hostname,
+            status: 1,
+            updatedBy: "pysync-registration",
+          },
+        });
+      }
+
       return buildResponse({
         serverId: existingServer.id,
-        hostname: existingServer.domain,
+        hostname,
         ipAddress: existingServer.ipAddress,
         registered: true,
         alreadyRegistered: true,
