@@ -11,6 +11,9 @@ const adapter = new PrismaMariaDb({
   user: process.env.DATABASE_USER,
   password: process.env.DATABASE_PASSWORD,
   database: process.env.DATABASE_NAME,
+  // MySQL 8 uses caching_sha2_password by default. The MariaDB driver needs
+  // permission to retrieve the server's RSA public key for that auth flow.
+  allowPublicKeyRetrieval: true,
   connectionLimit: 5,
 });
 
