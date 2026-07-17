@@ -175,7 +175,7 @@ export default function AdminSettingsPage() {
                       TikTok Live Status
                     </span>
                     <span className="mt-1 block text-xs text-slate-500">
-                      Show the floating LIVE button on the landing page.
+                      Change the floating TikTok status between LIVE and OFFLINE.
                     </span>
                   </span>
                   <Switch
