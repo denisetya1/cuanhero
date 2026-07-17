@@ -224,7 +224,7 @@ export default function AdminSettingsPage() {
           <div>
             <h2 className="font-semibold text-slate-950">WhatsApp Templates</h2>
             <p className="text-xs text-slate-500">
-              English and Indonesian templates for each customer flow.
+              Optional. Empty templates automatically use the application defaults.
             </p>
           </div>
         </div>

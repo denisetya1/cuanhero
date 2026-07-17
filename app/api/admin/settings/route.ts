@@ -10,6 +10,26 @@ import { NextRequest } from "next/server";
 
 const SETTINGS_ID = 1;
 
+const settingsFields = [
+  "whatsappNumber",
+  "metaTitleEn",
+  "metaTitleId",
+  "metaDescriptionEn",
+  "metaDescriptionId",
+  "orderMessageEn",
+  "orderMessageId",
+  "freeTrialMessageEn",
+  "freeTrialMessageId",
+  "renewalMessageEn",
+  "renewalMessageId",
+  "consultationMessageEn",
+  "consultationMessageId",
+] as const;
+
+const defaultTextSettings = Object.fromEntries(
+  settingsFields.map((field) => [field, ""]),
+) as Record<(typeof settingsFields)[number], string>;
+
 const settingsSelect = {
   id: true,
   whatsappNumber: true,
@@ -48,6 +68,16 @@ const emptySettings = {
   updatedAt: null,
 };
 
+const normalizeSettings = <T extends Record<string, unknown>>(settings: T) => ({
+  ...settings,
+  ...Object.fromEntries(
+    settingsFields.map((field) => [
+      field,
+      typeof settings[field] === "string" ? settings[field] : "",
+    ]),
+  ),
+});
+
 const ensureAdmin = async () => {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -76,7 +106,7 @@ export const GET = async () => {
     select: settingsSelect,
   });
 
-  return buildResponse(settings || emptySettings);
+  return buildResponse(normalizeSettings(settings || emptySettings));
 };
 
 export const PATCH = async (req: NextRequest) => {
@@ -84,42 +114,40 @@ export const PATCH = async (req: NextRequest) => {
   if (!session) return notAuthorizeResponse();
 
   const body = await req.json();
-  const fields = [
-    "whatsappNumber",
-    "metaTitleEn",
-    "metaTitleId",
-    "metaDescriptionEn",
-    "metaDescriptionId",
-    "orderMessageEn",
-    "orderMessageId",
-    "freeTrialMessageEn",
-    "freeTrialMessageId",
-    "renewalMessageEn",
-    "renewalMessageId",
-    "consultationMessageEn",
-    "consultationMessageId",
-  ] as const;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return buildErrorResponse(
+      "INVALID_SETTINGS",
+      "Settings payload must be an object.",
+      [],
+    );
+  }
 
-  const hasInvalidField = fields.some(
-    (field) => typeof body[field] !== "string",
+  const suppliedFields = settingsFields.filter((field) =>
+    Object.prototype.hasOwnProperty.call(body, field),
+  );
+  const hasInvalidField = suppliedFields.some(
+    (field) => body[field] !== null && typeof body[field] !== "string",
   );
 
   if (hasInvalidField) {
     return buildErrorResponse(
       "INVALID_SETTINGS",
-      "All settings fields must contain text.",
+      "Settings fields must contain text or be left empty.",
       [],
     );
   }
 
   const data = Object.fromEntries(
-    fields.map((field) => [field, body[field].trim()]),
-  ) as Record<(typeof fields)[number], string>;
+    suppliedFields.map((field) => [
+      field,
+      typeof body[field] === "string" ? body[field].trim() : "",
+    ]),
+  ) as Partial<Record<(typeof settingsFields)[number], string>>;
 
   if (
-    data.whatsappNumber.length > 50 ||
-    data.metaTitleEn.length > 191 ||
-    data.metaTitleId.length > 191
+    (data.whatsappNumber?.length ?? 0) > 50 ||
+    (data.metaTitleEn?.length ?? 0) > 191 ||
+    (data.metaTitleId?.length ?? 0) > 191
   ) {
     return buildErrorResponse(
       "INVALID_SETTINGS",
@@ -133,6 +161,7 @@ export const PATCH = async (req: NextRequest) => {
       where: { id: SETTINGS_ID },
       create: {
         id: SETTINGS_ID,
+        ...defaultTextSettings,
         ...data,
         createdBy: session.user.id,
         updatedBy: session.user.id,
@@ -144,7 +173,7 @@ export const PATCH = async (req: NextRequest) => {
       select: settingsSelect,
     });
 
-    return buildResponse(settings);
+    return buildResponse(normalizeSettings(settings));
   } catch (error) {
     console.error("UPDATE_APP_SETTINGS_ERROR:", error);
     return buildErrorResponse(

@@ -27,7 +27,7 @@ export const useGetAdminSettings = () => {
 export const useUpdateAdminSettings = () => {
   return useMutation({
     mutationKey: ["update-admin-settings"],
-    mutationFn: (payload: AdminSettingsPayload) =>
+    mutationFn: (payload: Partial<AdminSettingsPayload>) =>
       fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
