@@ -1,4 +1,7 @@
-import { upsertPySyncDnsRecord } from "@/lib/cloudflare";
+import {
+  deletePySyncDnsRecord,
+  upsertPySyncDnsRecord,
+} from "@/lib/cloudflare";
 import prisma from "@/lib/prisma";
 import { buildErrorResponse, buildResponse } from "@/lib/response";
 import { timingSafeEqual } from "node:crypto";
@@ -132,38 +135,60 @@ export const POST = async (req: NextRequest) => {
       },
     });
 
-    const ipVersion = isIP(publicIp);
-    if (ipVersion !== 4 && ipVersion !== 6) {
-      throw new Error("Unsupported public IP address.");
+    let hostname: string | null = null;
+    try {
+      const ipVersion = isIP(publicIp);
+      if (ipVersion !== 4 && ipVersion !== 6) {
+        throw new Error("Unsupported public IP address.");
+      }
+
+      hostname = await upsertPySyncDnsRecord(
+        server.id,
+        publicIp,
+        ipVersion,
+      );
+      const registeredServer = await prisma.server.update({
+        where: { id: server.id },
+        data: {
+          domain: hostname,
+          ...(!requestedName ? { name: `VPS #${server.id}` } : {}),
+          status: 1,
+          updatedBy: "pysync-registration",
+        },
+      });
+
+      return buildResponse({
+        serverId: registeredServer.id,
+        hostname: registeredServer.domain,
+        ipAddress: registeredServer.ipAddress,
+        registered: true,
+      });
+    } catch (registrationError) {
+      // ID server dibutuhkan untuk membentuk hostname Cloudflare. Jika setup
+      // DNS atau penyimpanan domain gagal, hapus semua hasil parsial agar
+      // server baru tidak tertinggal dengan domain null.
+      if (hostname) {
+        try {
+          await deletePySyncDnsRecord(server.id, hostname);
+        } catch (cleanupError) {
+          console.error("ROLLBACK_PYSYNC_DNS_ERROR:", cleanupError);
+        }
+      }
+
+      try {
+        await prisma.server.delete({ where: { id: server.id } });
+      } catch (cleanupError) {
+        console.error("ROLLBACK_PYSYNC_SERVER_ERROR:", cleanupError);
+      }
+
+      throw registrationError;
     }
-
-    const hostname = await upsertPySyncDnsRecord(
-      server.id,
-      publicIp,
-      ipVersion,
-    );
-    const registeredServer = await prisma.server.update({
-      where: { id: server.id },
-      data: {
-        domain: hostname,
-        ...(!requestedName ? { name: `VPS #${server.id}` } : {}),
-        status: 1,
-        updatedBy: "pysync-registration",
-      },
-    });
-
-    return buildResponse({
-      serverId: registeredServer.id,
-      hostname: registeredServer.domain,
-      ipAddress: registeredServer.ipAddress,
-      registered: true,
-    });
   } catch (error) {
     console.error("REGISTER_PYSYNC_SERVER_ERROR:", error);
     return buildErrorResponse(
       "REGISTER_SERVER_FAILED",
       "Failed to register the pySync server.",
-      [],
+      [error instanceof Error ? error.message : "Unknown registration error."],
       500,
     );
   }

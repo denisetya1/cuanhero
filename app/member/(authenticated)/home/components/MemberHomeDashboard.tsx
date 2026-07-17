@@ -849,59 +849,69 @@ export default function MemberHomeDashboard({
       );
     }
 
+    const openTimePicker = (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const input = document.getElementById(
+        inputId,
+      ) as HTMLInputElement | null;
+
+      if (!input) return;
+      input.focus();
+
+      try {
+        if (typeof input.showPicker === "function") {
+          input.showPicker();
+        } else {
+          input.click();
+        }
+      } catch {
+        input.click();
+      }
+    };
+
     return (
-      <label key={name} className="space-y-2">
+      <label key={name} className="block min-w-0 space-y-2">
         <span className="text-sm text-ch-muted">{meta.label}</span>
-        <div className={meta.type === "time" ? "min-w-0" : "flex min-w-0"}>
-          <div className="relative min-w-0 flex-1">
+        {meta.type === "time" ? (
+          <div className="flex h-11 w-full min-w-0 overflow-hidden rounded-lg border border-cyan-400/20 bg-black/35 shadow-inner shadow-cyan-950/40 transition-colors focus-within:border-cyan-300 focus-within:ring-3 focus-within:ring-cyan-400/30">
             <Input
               id={inputId}
-              type={meta.type}
-              step={meta.type === "time" ? 1 : meta.step || "1"}
+              type="time"
+              step={1}
               {...configForm.register(name)}
-              className={`${inputClass} ${meta.type === "time" ? "pr-28 [&::-webkit-calendar-picker-indicator]:hidden" : ""} ${suffix && meta.type !== "time" ? "rounded-r-none" : ""}`}
+              className="h-full w-0 min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 text-cyan-50 shadow-none focus-visible:border-0 focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:hidden"
             />
-            {meta.type === "time" && (
-              <button
-                type="button"
-                aria-label={`Open ${meta.label} picker`}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const input = document.getElementById(
-                    inputId,
-                  ) as HTMLInputElement | null;
-
-                  if (!input) return;
-                  input.focus();
-
-                  try {
-                    if (typeof input.showPicker === "function") {
-                      input.showPicker();
-                    } else {
-                      input.click();
-                    }
-                  } catch {
-                    input.click();
-                  }
-                }}
-                className="absolute top-1/2 right-20 z-20 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center text-cyan-300 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </button>
-            )}
-            {meta.type === "time" && (
-              <span className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-20 items-center justify-center rounded-r-lg border-l border-cyan-400/20 bg-cyan-950/70 px-2 text-xs font-medium whitespace-nowrap text-cyan-200">
-                {utcOffsetLabel}
+            <button
+              type="button"
+              aria-label={`Open ${meta.label} picker`}
+              onClick={openTimePicker}
+              className="flex h-full w-10 shrink-0 cursor-pointer items-center justify-center text-cyan-300 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            <span className="pointer-events-none flex h-full w-20 shrink-0 items-center justify-center border-l border-cyan-400/20 bg-cyan-950/70 px-2 text-xs font-medium whitespace-nowrap text-cyan-200">
+              {utcOffsetLabel}
+            </span>
+          </div>
+        ) : (
+          <div className="flex min-w-0">
+            <div className="relative min-w-0 flex-1">
+              <Input
+                id={inputId}
+                type={meta.type}
+                step={meta.step || "1"}
+                {...configForm.register(name)}
+                className={`${inputClass} ${suffix ? "rounded-r-none" : ""}`}
+              />
+            </div>
+            {suffix && (
+              <span className="flex h-11 shrink-0 items-center rounded-r-lg border border-l-0 border-cyan-400/20 bg-cyan-950/40 px-3 text-xs font-medium text-cyan-200">
+                {suffix}
               </span>
             )}
           </div>
-          {suffix && meta.type !== "time" && (
-            <span className="flex h-11 shrink-0 items-center rounded-r-lg border border-l-0 border-cyan-400/20 bg-cyan-950/40 px-3 text-xs font-medium text-cyan-200">
-              {suffix}
-            </span>
-          )}
-        </div>
+        )}
         {error?.message && (
           <span className="text-xs text-red-300">{String(error.message)}</span>
         )}
