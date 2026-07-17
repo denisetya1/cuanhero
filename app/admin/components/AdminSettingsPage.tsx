@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
 import { Loader2, MessageSquareText, Save, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   type AdminSettingsPayload,
   useGetAdminSettings,
@@ -16,6 +17,20 @@ import {
 
 const settingsSchema = z.object({
   whatsappNumber: z.string().trim().max(50, "Maximum 50 characters."),
+  tiktokLiveEnabled: z.boolean(),
+  tiktokLiveUrl: z
+    .string()
+    .trim()
+    .max(191, "Maximum 191 characters.")
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        const url = new URL(value);
+        return ["http:", "https:"].includes(url.protocol);
+      } catch {
+        return false;
+      }
+    }, "Enter a valid HTTP or HTTPS URL."),
   metaTitleEn: z.string().trim().max(191, "Maximum 191 characters."),
   metaTitleId: z.string().trim().max(191, "Maximum 191 characters."),
   metaDescriptionEn: z.string(),
@@ -34,6 +49,8 @@ type SettingsFormValues = z.infer<typeof settingsSchema>;
 
 const emptySettings: SettingsFormValues = {
   whatsappNumber: "",
+  tiktokLiveEnabled: false,
+  tiktokLiveUrl: "",
   metaTitleEn: "",
   metaTitleId: "",
   metaDescriptionEn: "",
@@ -134,17 +151,54 @@ export default function AdminSettingsPage() {
             <p className="text-xs text-slate-500">Primary WhatsApp contact number.</p>
           </div>
         </div>
-        <label className="block max-w-xl">
-          <span className="mb-2 block text-sm font-medium text-slate-700">
-            WhatsApp Number
-          </span>
-          <Input
-            placeholder="6281234567890"
-            {...form.register("whatsappNumber")}
-            className={inputClass}
-          />
-          <FieldError message={form.formState.errors.whatsappNumber?.message} />
-        </label>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-slate-700">
+              WhatsApp Number
+            </span>
+            <Input
+              placeholder="6281234567890"
+              {...form.register("whatsappNumber")}
+              className={inputClass}
+            />
+            <FieldError message={form.formState.errors.whatsappNumber?.message} />
+          </label>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <Controller
+              control={form.control}
+              name="tiktokLiveEnabled"
+              render={({ field }) => (
+                <label className="flex items-center justify-between gap-4">
+                  <span>
+                    <span className="block text-sm font-medium text-slate-700">
+                      TikTok Live Status
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      Show the floating LIVE button on the landing page.
+                    </span>
+                  </span>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </label>
+              )}
+            />
+            <label className="mt-4 block">
+              <span className="mb-2 block text-sm font-medium text-slate-700">
+                TikTok Live URL
+              </span>
+              <Input
+                type="url"
+                placeholder="https://www.tiktok.com/@username/live"
+                {...form.register("tiktokLiveUrl")}
+                className={inputClass}
+              />
+              <FieldError message={form.formState.errors.tiktokLiveUrl?.message} />
+            </label>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -241,6 +241,8 @@ model RuntimeHealthIssue {
 model AppSetting {
   id                    Int      @id @default(1)
   whatsappNumber        String   @default("") @map("whatsapp_number")
+  tiktokLiveEnabled     Boolean  @default(false) @map("tiktok_live_enabled")
+  tiktokLiveUrl         String   @default("") @map("tiktok_live_url")
   metaTitleEn           String   @default("") @map("meta_title_en")
   metaTitleId           String   @default("") @map("meta_title_id")
   metaDescriptionEn     String   @map("meta_description_en") @db.Text

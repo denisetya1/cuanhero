@@ -3,6 +3,8 @@ import { handleRes } from "@/lib/response";
 
 export type AdminSettingsPayload = {
   whatsappNumber: string;
+  tiktokLiveEnabled: boolean;
+  tiktokLiveUrl: string;
   metaTitleEn: string;
   metaTitleId: string;
   metaDescriptionEn: string;

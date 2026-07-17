@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LucideMoveUpRight, MessageCircle } from "lucide-react";
+import { LucideMoveUpRight, MessageCircle, Radio } from "lucide-react";
 import prisma from "@/lib/prisma";
 import FAQSection from "./FAQSection";
 import { landingContent, type LandingLang } from "./landing-content";
@@ -17,6 +17,8 @@ export default async function LandingPage({ lang }: { lang: LandingLang }) {
     where: { id: 1 },
     select: {
       whatsappNumber: true,
+      tiktokLiveEnabled: true,
+      tiktokLiveUrl: true,
       freeTrialMessageEn: true,
       freeTrialMessageId: true,
     },
@@ -30,9 +32,45 @@ export default async function LandingPage({ lang }: { lang: LandingLang }) {
   const freeTrialHref = whatsappNumber
     ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(freeTrialMessage)}`
     : undefined;
+  let tiktokLiveUrl: string | undefined;
+  if (settings?.tiktokLiveEnabled && settings.tiktokLiveUrl.trim()) {
+    try {
+      const url = new URL(settings.tiktokLiveUrl.trim());
+      if (["http:", "https:"].includes(url.protocol)) {
+        tiktokLiveUrl = url.toString();
+      }
+    } catch {
+      tiktokLiveUrl = undefined;
+    }
+  }
 
   return (
     <>
+      {tiktokLiveUrl && (
+        <a
+          href={tiktokLiveUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={lang === "en" ? "Watch TikTok Live" : "Tonton TikTok Live"}
+          className="group fixed right-4 bottom-5 z-50 flex items-center gap-2.5 rounded-full border border-fuchsia-300/30 bg-[#080b12]/95 px-3 py-2.5 text-white shadow-[0_0_0_1px_rgba(0,229,255,0.15),-5px_0_24px_rgba(0,229,255,0.22),5px_0_24px_rgba(255,0,80,0.24)] backdrop-blur-xl transition hover:-translate-y-1 hover:border-fuchsia-300/60 sm:right-6 sm:bottom-6 sm:px-4"
+        >
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-cyan-400 to-fuchsia-500 text-black">
+            <span className="absolute inset-0 animate-ping rounded-full bg-fuchsia-400/30" />
+            <Radio className="relative h-4 w-4" />
+          </span>
+          <span className="text-left leading-none">
+            <span className="block font-mono text-[9px] font-black tracking-[0.22em] text-red-400">
+              LIVE
+            </span>
+            <span className="mt-1 hidden text-xs font-bold sm:block">
+              {lang === "en" ? "Watch on TikTok" : "Tonton di TikTok"}
+            </span>
+            <span className="mt-1 block text-[11px] font-bold sm:hidden">
+              TikTok
+            </span>
+          </span>
+        </a>
+      )}
       <section
         id="hero"
         className="relative mx-auto flex min-h-[calc(100vh-88px)] w-full max-w-7xl flex-col items-center justify-center px-4 py-20 text-center md:px-8"

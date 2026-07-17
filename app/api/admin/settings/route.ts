@@ -12,6 +12,7 @@ const SETTINGS_ID = 1;
 
 const settingsFields = [
   "whatsappNumber",
+  "tiktokLiveUrl",
   "metaTitleEn",
   "metaTitleId",
   "metaDescriptionEn",
@@ -33,6 +34,8 @@ const defaultTextSettings = Object.fromEntries(
 const settingsSelect = {
   id: true,
   whatsappNumber: true,
+  tiktokLiveEnabled: true,
+  tiktokLiveUrl: true,
   metaTitleEn: true,
   metaTitleId: true,
   metaDescriptionEn: true,
@@ -52,6 +55,8 @@ const settingsSelect = {
 const emptySettings = {
   id: SETTINGS_ID,
   whatsappNumber: "",
+  tiktokLiveEnabled: false,
+  tiktokLiveUrl: "",
   metaTitleEn: "",
   metaTitleId: "",
   metaDescriptionEn: "",
@@ -125,9 +130,14 @@ export const PATCH = async (req: NextRequest) => {
   const suppliedFields = settingsFields.filter((field) =>
     Object.prototype.hasOwnProperty.call(body, field),
   );
+  const hasTikTokLiveEnabled = Object.prototype.hasOwnProperty.call(
+    body,
+    "tiktokLiveEnabled",
+  );
   const hasInvalidField = suppliedFields.some(
     (field) => body[field] !== null && typeof body[field] !== "string",
-  );
+  ) ||
+    (hasTikTokLiveEnabled && typeof body.tiktokLiveEnabled !== "boolean");
 
   if (hasInvalidField) {
     return buildErrorResponse(
@@ -143,15 +153,32 @@ export const PATCH = async (req: NextRequest) => {
       typeof body[field] === "string" ? body[field].trim() : "",
     ]),
   ) as Partial<Record<(typeof settingsFields)[number], string>>;
+  const booleanData = hasTikTokLiveEnabled
+    ? { tiktokLiveEnabled: body.tiktokLiveEnabled as boolean }
+    : {};
+
+  if (data.tiktokLiveUrl) {
+    try {
+      const url = new URL(data.tiktokLiveUrl);
+      if (!["http:", "https:"].includes(url.protocol)) throw new Error();
+    } catch {
+      return buildErrorResponse(
+        "INVALID_SETTINGS",
+        "TikTok Live URL must be a valid HTTP or HTTPS URL.",
+        [],
+      );
+    }
+  }
 
   if (
     (data.whatsappNumber?.length ?? 0) > 50 ||
+    (data.tiktokLiveUrl?.length ?? 0) > 191 ||
     (data.metaTitleEn?.length ?? 0) > 191 ||
     (data.metaTitleId?.length ?? 0) > 191
   ) {
     return buildErrorResponse(
       "INVALID_SETTINGS",
-      "WhatsApp number or meta title is too long.",
+      "WhatsApp number, TikTok URL, or meta title is too long.",
       [],
     );
   }
@@ -163,11 +190,13 @@ export const PATCH = async (req: NextRequest) => {
         id: SETTINGS_ID,
         ...defaultTextSettings,
         ...data,
+        ...booleanData,
         createdBy: session.user.id,
         updatedBy: session.user.id,
       },
       update: {
         ...data,
+        ...booleanData,
         updatedBy: session.user.id,
       },
       select: settingsSelect,
