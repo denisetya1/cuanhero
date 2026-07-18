@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Bell,
   Bot,
@@ -14,10 +14,12 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Moon,
   Package,
   Server,
   ShieldAlert,
   Settings,
+  Sun,
   Activity,
   Users,
   X,
@@ -54,6 +56,9 @@ const menu = [
 ];
 
 const queryClient = new QueryClient();
+const ADMIN_THEME_KEY = "cuanhero-admin-theme";
+
+type AdminTheme = "light" | "dark";
 
 const getInitials = (name?: string | null, email?: string | null) => {
   const source = name || email || "Admin";
@@ -69,6 +74,38 @@ export default function AdminShell({ children, user }: AdminShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [theme, setTheme] = useState<AdminTheme>("dark");
+  const [themeReady, setThemeReady] = useState(false);
+
+  // Radix dialog/popover menggunakan portal di luar AdminShell. Pasang class
+  // pada root document agar seluruh portal admin ikut memakai theme admin.
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem(ADMIN_THEME_KEY);
+    const initialTheme =
+      savedTheme === "light" || savedTheme === "dark" ? savedTheme : "dark";
+    const frame = window.requestAnimationFrame(() => {
+      setTheme(initialTheme);
+      setThemeReady(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!themeReady) return;
+
+    const root = document.documentElement;
+    const isDark = theme === "dark";
+
+    root.classList.toggle("admin-dark", isDark);
+    root.classList.toggle("admin-light", !isDark);
+    root.classList.toggle("dark", isDark);
+    window.localStorage.setItem(ADMIN_THEME_KEY, theme);
+
+    return () => {
+      root.classList.remove("admin-dark", "admin-light", "dark");
+    };
+  }, [theme, themeReady]);
 
   const userName = user.name || "Admin";
   const initials = getInitials(user.name, user.email);
@@ -177,7 +214,9 @@ export default function AdminShell({ children, user }: AdminShellProps) {
   return (
     <QueryClientProvider client={queryClient}>
     <AdminAccessProvider role={user.role}>
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <div
+      className={`${theme === "dark" ? "admin-dark dark" : "admin-light"} min-h-screen bg-slate-50 text-slate-950`}
+    >
       <aside
         className={`fixed left-0 top-0 z-30 hidden h-screen border-r border-slate-200 bg-white transition-all duration-200 lg:block ${
           collapsed ? "w-20" : "w-72"
@@ -225,6 +264,24 @@ export default function AdminShell({ children, user }: AdminShellProps) {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setTheme((current) =>
+                    current === "dark" ? "light" : "dark",
+                  )
+                }
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-gray-700 shadow-sm transition hover:bg-slate-50"
+                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+                title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+              >
+                {theme === "dark" ? (
+                  <Sun className="h-5 w-5" />
+                ) : (
+                  <Moon className="h-5 w-5" />
+                )}
+              </button>
+
               <button
                 type="button"
                 className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-gray-700 shadow-sm"

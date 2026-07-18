@@ -490,6 +490,177 @@ body {
   }
 }
 
+/* Authenticated admin theme.
+   Admin pages lama masih memakai utility warna terang secara eksplisit.
+   Scope ini membuat semuanya konsisten tanpa memengaruhi landing/member area. */
+.admin-light {
+  color-scheme: light;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.admin-light body {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.admin-dark {
+  color-scheme: dark;
+  --background: #020617;
+  --foreground: #f8fafc;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --popover: #111827;
+  --popover-foreground: #f8fafc;
+  --secondary: #172033;
+  --secondary-foreground: #f8fafc;
+  --muted: #172033;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --border: #263449;
+  --input: #334155;
+  background: #020617;
+  color: #f8fafc;
+}
+
+.admin-dark body,
+.admin-dark .bg-slate-50,
+.admin-dark [class*="bg-slate-50/"] {
+  background-color: #020617 !important;
+}
+
+.admin-dark .bg-white,
+.admin-dark [class*="bg-white/"] {
+  background-color: #0f172a !important;
+}
+
+.admin-dark .bg-gray-50,
+.admin-dark [class*="bg-gray-50/"] {
+  background-color: #111827 !important;
+}
+
+.admin-dark .bg-slate-100,
+.admin-dark [class*="bg-slate-100/"] {
+  background-color: #172033 !important;
+}
+
+.admin-dark .bg-gray-100,
+.admin-dark [class*="bg-gray-100/"] {
+  background-color: #1e293b !important;
+}
+
+.admin-dark .bg-blue-50,
+.admin-dark [class*="bg-blue-50/"] {
+  background-color: rgb(37 99 235 / 16%) !important;
+}
+
+.admin-dark .bg-red-50,
+.admin-dark [class*="bg-red-50/"] {
+  background-color: rgb(239 68 68 / 12%) !important;
+}
+
+.admin-dark .bg-amber-50,
+.admin-dark [class*="bg-amber-50/"] {
+  background-color: rgb(245 158 11 / 12%) !important;
+}
+
+.admin-dark .bg-emerald-50,
+.admin-dark [class*="bg-emerald-50/"] {
+  background-color: rgb(16 185 129 / 12%) !important;
+}
+
+.admin-dark .bg-green-50,
+.admin-dark [class*="bg-green-50/"] {
+  background-color: rgb(34 197 94 / 12%) !important;
+}
+
+.admin-dark .bg-violet-50,
+.admin-dark [class*="bg-violet-50/"] {
+  background-color: rgb(139 92 246 / 12%) !important;
+}
+
+.admin-dark :is(.text-slate-950, .text-slate-900, .text-slate-800),
+.admin-dark :is(.text-gray-950, .text-gray-900, .text-gray-800) {
+  color: #f8fafc !important;
+}
+
+.admin-dark :is(.text-slate-700, .text-slate-600),
+.admin-dark :is(.text-gray-700, .text-gray-600) {
+  color: #cbd5e1 !important;
+}
+
+.admin-dark :is(.text-slate-500, .text-gray-500) {
+  color: #94a3b8 !important;
+}
+
+.admin-dark :is(.text-slate-400, .text-gray-400) {
+  color: #64748b !important;
+}
+
+.admin-dark :is(.border-slate-100, .border-slate-200, .border-slate-300),
+.admin-dark :is(.border-gray-100, .border-gray-200, .border-gray-300) {
+  border-color: #263449 !important;
+}
+
+.admin-dark input,
+.admin-dark textarea,
+.admin-dark select {
+  border-color: #334155;
+  background-color: #0b1220;
+  color: #f8fafc;
+}
+
+.admin-dark input::placeholder,
+.admin-dark textarea::placeholder {
+  color: #64748b;
+}
+
+.admin-dark [class*="hover:bg-slate-50"]:hover,
+.admin-dark [class*="hover:bg-gray-50"]:hover,
+.admin-dark [class*="hover:bg-slate-100"]:hover {
+  background-color: #1e293b !important;
+}
+
+.admin-dark [class*="hover:text-slate-950"]:hover,
+.admin-dark [class*="hover:text-gray-900"]:hover,
+.admin-dark [class*="hover:text-gray-700"]:hover {
+  color: #f8fafc !important;
+}
+
+.admin-dark .cms-editor .rsw-toolbar {
+  border-color: #334155;
+  background: #111827;
+  color: #e2e8f0;
+}
+
+.admin-dark .cms-editor .rsw-ce {
+  background: #0b1220;
+  color: #f8fafc;
+}
+
+.admin-dark .cms-editor .rsw-btn {
+  color: #cbd5e1;
+}
+
+.admin-dark .cms-editor .rsw-btn:hover {
+  background: #1e293b;
+}
+
 .cms-editor .rsw-editor {
   border: 0;
   border-radius: 0;
