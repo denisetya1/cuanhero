@@ -32,6 +32,7 @@ export default function Footer() {
   const lang: LandingLang =
     pathname === "/en" || pathname.startsWith("/en/") ? "en" : "id";
   const content = landingContent[lang];
+  const landingPath = lang === "en" ? "/en" : "/";
   const languageHref =
     lang === "en"
       ? pathname.replace(/^\/en(?=\/|$)/, "") || "/"
@@ -80,7 +81,7 @@ export default function Footer() {
               {navItems.map(([key, href]) => (
                 <Link
                   key={key}
-                  href={href}
+                  href={`${landingPath}${href}`}
                   className="group flex items-center gap-2 py-2 text-sm text-slate-400 transition hover:translate-x-1 hover:text-cyan-300"
                 >
                   <ChevronRight className="h-3.5 w-3.5 text-slate-600 transition group-hover:text-cyan-300" />

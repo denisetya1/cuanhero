@@ -5,7 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronDown,
-  MessageCircle,
+  CircleArrowUp,
+  CreditCard,
   RotateCcw,
   ShieldAlert,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import {
 import { useGetTradingAccounts } from "@/hooks/useTradingAccounts";
 import { handleRes } from "@/lib/response";
 import { TradingAccountStore } from "@/stores/traddingAccount";
+import { isSubscriptionConfigLocked } from "@/lib/subscription-expiration";
 
 type EAConfiguration = {
   EnableBot: boolean;
@@ -76,8 +78,10 @@ type TradingAccount = {
   lastSync?: string | Date | null;
   endDate?: string | Date | null;
   package?: {
+    id?: number;
     code?: string | null;
     name?: string | null;
+    price?: string | null;
     recurringType?: string | null;
   } | null;
   expertAdvisor?: {
@@ -547,6 +551,17 @@ const getMemberConfigDefaultValues = (
   ...config,
 });
 
+const formatBillingAmount = (value?: string | null) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "-";
+
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
 export default function MemberHomeDashboard() {
   const detectedTimeZone = useSyncExternalStore(
     subscribeToTimeZone,
@@ -592,6 +607,14 @@ export default function MemberHomeDashboard() {
   const upgradeHref = selectedAccount
     ? `/order?tradingAccountId=${selectedAccount.id}`
     : null;
+  const renewalHref =
+    selectedAccount?.package?.id && !isFreeTrial
+      ? `/order?tradingAccountId=${selectedAccount.id}&package=${selectedAccount.package.id}`
+      : null;
+  const showNextBillingAmount =
+    !isFreeTrial &&
+    selectedAccount?.package?.recurringType?.trim().toLowerCase() !==
+      "lifetime";
 
   const showRenewButton = useMemo(() => {
     const daysRemaining = getDaysUntilDate(selectedAccount?.endDate);
@@ -622,6 +645,7 @@ export default function MemberHomeDashboard() {
 
   const currentEAStatus = selectedAccount?.eaStatus ?? 0;
   const botStatus = getBotStatus(currentEAStatus);
+  const isConfigLocked = isSubscriptionConfigLocked(selectedAccount?.endDate);
   const config = useMemo(
     () => parseConfig(selectedAccount?.eaConfiguration, timeZoneOffsetMinutes),
     [selectedAccount?.eaConfiguration, timeZoneOffsetMinutes],
@@ -637,6 +661,8 @@ export default function MemberHomeDashboard() {
   }, [config, configForm, selectedAccount?.id]);
 
   const handleResetConfig = () => {
+    if (isConfigLocked) return;
+
     const defaultConfig = selectedAccount?.expertAdvisor?.defaultConfig;
     if (!defaultConfig) {
       toast.error("The default EA configuration is not available.");
@@ -656,7 +682,7 @@ export default function MemberHomeDashboard() {
   };
 
   const handleSaveConfig = async (values: MemberConfigFormValues) => {
-    if (!selectedAccount) return;
+    if (!selectedAccount || isConfigLocked) return;
 
     const configuration = {
       TimeZone: "UTC",
@@ -966,7 +992,7 @@ export default function MemberHomeDashboard() {
                     className="h-auto min-h-8 shrink-0 bg-emerald-500 px-3 py-1.5 text-xs font-semibold whitespace-normal text-white hover:bg-emerald-400"
                   >
                     <Link href={upgradeHref}>
-                      <MessageCircle className="h-3.5 w-3.5" />
+                      <CircleArrowUp className="h-3.5 w-3.5" />
                       Upgrade to IB Monthly
                     </Link>
                   </Button>
@@ -976,18 +1002,25 @@ export default function MemberHomeDashboard() {
             <div className={fieldPanelClass}>
               <p className="text-xs text-cyan-300/80">Subscription End Date</p>
               <div className="mt-1 flex items-center justify-between gap-3">
-                <p className="font-semibold text-white">
-                  {formatDateOnly(selectedAccount?.endDate)}
-                </p>
-                {!isFreeTrial && showRenewButton && upgradeHref && (
+                <div>
+                  <p className="font-semibold text-white">
+                    {formatDateOnly(selectedAccount?.endDate)}
+                  </p>
+                  {showNextBillingAmount ? (
+                    <p className="mt-1 text-xs text-cyan-300/80">
+                      Next billing: {formatBillingAmount(selectedAccount?.package?.price)}
+                    </p>
+                  ) : null}
+                </div>
+                {!isFreeTrial && showRenewButton && renewalHref && (
                   <Button
                     asChild
                     size="sm"
                     className="h-8 shrink-0 bg-emerald-500 px-3 text-xs font-semibold text-white hover:bg-emerald-400"
                   >
-                    <Link href={upgradeHref}>
-                      <MessageCircle className="h-3.5 w-3.5" />
-                      Renew
+                    <Link href={renewalHref}>
+                      <CreditCard className="h-3.5 w-3.5" />
+                      Renew Subscription
                     </Link>
                   </Button>
                 )}
@@ -1062,7 +1095,9 @@ export default function MemberHomeDashboard() {
                   variant="outline"
                   size="sm"
                   disabled={
-                    !selectedAccount?.expertAdvisor?.defaultConfig || isSaving
+                    !selectedAccount?.expertAdvisor?.defaultConfig ||
+                    isSaving ||
+                    isConfigLocked
                   }
                   onClick={handleResetConfig}
                   className="border-cyan-400/30 bg-cyan-400/5 text-cyan-100 hover:bg-cyan-400/15 hover:text-white"
@@ -1075,7 +1110,15 @@ export default function MemberHomeDashboard() {
               </div>
             </div>
 
-            <div className="grid gap-5">
+            {isConfigLocked && (
+              <div className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100">
+                This bot configuration is locked because the subscription is
+                within one hour of expiration or has expired. Auto Trade has
+                been disabled.
+              </div>
+            )}
+
+            <fieldset disabled={isConfigLocked} className="grid gap-5">
               {renderConfigSection(
                 "Core Settings",
                 "Essential settings for enabling the bot and defining its initial lot size.",
@@ -1102,21 +1145,28 @@ export default function MemberHomeDashboard() {
 
                 <Button
                   type="submit"
-                  disabled={!selectedAccount || isSaving || !isConfigDirty}
+                  disabled={
+                    !selectedAccount ||
+                    isSaving ||
+                    !isConfigDirty ||
+                    isConfigLocked
+                  }
                   className={`h-12 w-full ${
-                    isConfigDirty
+                    isConfigDirty && !isConfigLocked
                       ? "bg-cyan-500 text-black shadow-[0_0_24px_rgba(0,217,255,0.45)] hover:bg-cyan-300"
                       : "bg-slate-700 text-slate-400 hover:bg-slate-700"
                   }`}
                 >
                   {isSaving
                     ? "Saving..."
+                    : isConfigLocked
+                      ? "Configuration Locked"
                     : isConfigDirty
                       ? "Save Changes"
                       : "No Changes"}
                 </Button>
               </div>
-            </div>
+            </fieldset>
           </div>
         </section>
         <div aria-hidden="true" className="h-0 lg:h-16" />

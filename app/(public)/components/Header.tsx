@@ -18,6 +18,7 @@ const Header = () => {
   const lang: LandingLang =
     pathname === "/en" || pathname.startsWith("/en/") ? "en" : "id";
   const content = landingContent[lang].nav;
+  const landingPath = lang === "en" ? "/en" : "/";
   const languageHref =
     lang === "en"
       ? pathname.replace(/^\/en(?=\/|$)/, "") || "/"
@@ -34,7 +35,15 @@ const Header = () => {
             alt="CuanHero"
             width={170}
             height={62}
-            className="h-11 w-auto object-contain"
+            className="hidden h-11 w-auto object-contain md:block"
+            priority
+          />
+          <Image
+            src="/images/logo-small.png"
+            alt="CuanHero"
+            width={48}
+            height={48}
+            className="h-10 w-10 object-contain md:hidden"
             priority
           />
         </Link>
@@ -43,7 +52,7 @@ const Header = () => {
           {navItems.map(([key, href]) => (
             <Link
               key={key}
-              href={href}
+              href={`${landingPath}${href}`}
               className="transition hover:text-ch-primary"
             >
               {content[key]}
@@ -66,7 +75,15 @@ const Header = () => {
           </Link>
         </div>
 
-        <MobileDrawer lang={lang} />
+        <div className="flex items-center gap-2 md:hidden">
+          <Link
+            href="/member/login"
+            className="button inline-flex h-9 items-center px-3 text-[11px] font-bold text-white"
+          >
+            {content.memberLogin}
+          </Link>
+          <MobileDrawer lang={lang} languageHref={languageHref} />
+        </div>
       </div>
     </header>
   );

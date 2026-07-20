@@ -150,19 +150,32 @@ the same reminder twice for the same trading account and end date.
 
 ## Subscription expiration cron
 
-The expiration cron disables subscriptions after their full `endDate` has
-passed, terminates deployed pySync instances, and marks both the account and EA
-runtime as terminated. It uses the same `CRON_SECRET` as the renewal cron.
+The expiration flow has two stages and uses the same `CRON_SECRET` as the
+renewal cron:
 
-Call it once per day shortly after midnight in Jakarta:
+1. One hour before the end of the subscription date (23:00 WIB), Auto Trade is
+   changed to `false` in pySync and the member configuration is locked.
+2. After a three-day grace period has fully elapsed, the deployed pySync
+   instance is terminated and both the account and EA runtime are marked as
+   terminated.
+
+Run the disable endpoint every minute so the one-hour cutoff is applied on
+time:
+
+```bash
+* * * * * /usr/bin/curl --fail-with-body --silent --show-error --max-time 60 -X POST https://cuanhero.com/api/cron/subscription-disables -H "Authorization: Bearer YOUR_CRON_SECRET" >> /var/log/cuanhero-subscription-disable.log 2>&1
+```
+
+Call the termination endpoint once per day after 00:00 WIB:
 
 ```bash
 curl -X POST https://cuanhero.com/api/cron/subscription-expirations \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-If pySync cannot be reached, member access is still disabled immediately and
-the runtime cleanup is retried on the next cron run.
+If pySync cannot be reached, the disable or runtime cleanup is retried on the
+next cron run. Member config writes are independently blocked by the API after
+the one-hour cutoff.
 
 ## Runtime healthcheck cron
 

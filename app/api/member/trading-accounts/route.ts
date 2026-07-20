@@ -12,6 +12,7 @@ import {
   notAuthorizeResponse,
 } from "@/lib/response";
 import { NextRequest } from "next/server";
+import { isSubscriptionConfigLocked } from "@/lib/subscription-expiration";
 
 const tradingAccountSelect = {
   id: true,
@@ -26,8 +27,10 @@ const tradingAccountSelect = {
   endDate: true,
   package: {
     select: {
+      id: true,
       code: true,
       name: true,
+      price: true,
       recurringType: true,
     },
   },
@@ -107,6 +110,7 @@ export const PATCH = async (req: NextRequest) => {
     select: {
       id: true,
       accountId: true,
+      endDate: true,
       server: {
         select: {
           ipAddress: true,
@@ -122,6 +126,18 @@ export const PATCH = async (req: NextRequest) => {
       "Trading account not found.",
       [],
       404,
+    );
+  }
+
+  if (
+    configuration !== undefined &&
+    isSubscriptionConfigLocked(existingAccount.endDate)
+  ) {
+    return buildErrorResponse(
+      "SUBSCRIPTION_CONFIG_LOCKED",
+      "Bot configuration is locked because the subscription is within one hour of expiration or has expired.",
+      [],
+      403,
     );
   }
 

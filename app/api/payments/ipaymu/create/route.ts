@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { auth } from "@/lib/auth";
+import { verifyExnessPartnerAccount } from "@/lib/exness-partner";
+import { IB_VERIFICATION_PACKAGE_CODES } from "@/lib/ib-verification";
 import { createIpaymuDirectPayment } from "@/lib/ipaymu";
 import prisma from "@/lib/prisma";
 import {
@@ -36,6 +38,7 @@ export const POST = async (request: NextRequest) => {
     paymentMethod?: unknown;
     phone?: unknown;
     tradingAccountId?: unknown;
+    termsAccepted?: unknown;
   };
   try {
     input = (await request.json()) as typeof input;
@@ -51,6 +54,14 @@ export const POST = async (request: NextRequest) => {
     input.tradingAccountId !== null &&
     String(input.tradingAccountId).trim() !== "";
   const tradingAccountId = Number(input.tradingAccountId);
+
+  if (input.termsAccepted !== true) {
+    return buildErrorResponse(
+      "TERMS_NOT_ACCEPTED",
+      "Anda harus menyetujui Syarat dan Ketentuan sebelum melanjutkan.",
+      [],
+    );
+  }
 
   if (
     !Number.isInteger(expertAdvisorId) ||
@@ -135,7 +146,42 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
+  const packageCode = packageItem.code?.trim().toUpperCase() || "";
+
+  // IB membership can change after initial activation. Re-check the existing
+  // MT5 account before creating every renewal/upgrade payment for an IB plan.
+  if (
+    upgradeAccount &&
+    IB_VERIFICATION_PACKAGE_CODES.has(packageCode)
+  ) {
+    try {
+      const verification = await verifyExnessPartnerAccount(
+        upgradeAccount.accountId,
+      );
+
+      if (!verification.verified) {
+        return buildErrorResponse(
+          "IB_ACCOUNT_NOT_VERIFIED",
+          "Trading account ini sudah tidak terdaftar di bawah Exness IB CuanHero. Hubungi admin sebelum melakukan renewal atau upgrade.",
+          [],
+          422,
+        );
+      }
+    } catch (error) {
+      console.error("VERIFY_RENEWAL_EXNESS_IB_ERROR:", error);
+      return buildErrorResponse(
+        "IB_VERIFICATION_UNAVAILABLE",
+        error instanceof Error
+          ? error.message
+          : "Verifikasi IB sedang tidak tersedia. Silakan coba kembali.",
+        [],
+        502,
+      );
+    }
+  }
+
   const basePrice = Number(packageItem.price);
+  const baseAmount = Math.round(basePrice);
   const discount = Math.max(0, packageItem.discountPercent || 0);
   const isFreeTrialUpgrade =
     upgradeAccount?.package.code?.trim().toUpperCase() === "FREE_TRIAL";
@@ -147,13 +193,20 @@ export const POST = async (request: NextRequest) => {
       ? basePrice - (basePrice * discount) / 100
       : basePrice,
   );
+  const appliedDiscountPercent = applyIntroDiscount ? discount : 0;
+  const discountAmount = Math.max(0, baseAmount - amount);
   const orderType = !upgradeAccount
     ? "NEW"
     : upgradeAccount.packageId === packageItem.id && !isFreeTrialUpgrade
       ? "RENEWAL"
       : "UPGRADE";
 
-  if (!Number.isFinite(amount) || amount < 0) {
+  if (
+    !Number.isFinite(baseAmount) ||
+    baseAmount < 0 ||
+    !Number.isFinite(amount) ||
+    amount < 0
+  ) {
     return buildErrorResponse(
       "INVALID_ORDER_AMOUNT",
       "Nominal order tidak valid.",
@@ -225,9 +278,13 @@ export const POST = async (request: NextRequest) => {
           userId: user.id,
           expertAdvisorId: expertAdvisor.id,
           packageId: packageItem.id,
+          baseAmount,
+          discountPercent: appliedDiscountPercent,
+          discountAmount,
           amount: 0,
           type: "NEW",
           status: "PAID",
+          termsAcceptedAt: new Date(),
           paymentProvider: "FREE",
           paymentMethod: "FREE",
           providerMessage: "Free package activated",
@@ -283,8 +340,12 @@ export const POST = async (request: NextRequest) => {
       expertAdvisorId: expertAdvisor.id,
       packageId: packageItem.id,
       tradingAccountId: upgradeAccount?.id || null,
+      baseAmount,
+      discountPercent: appliedDiscountPercent,
+      discountAmount,
       amount,
       type: orderType,
+      termsAcceptedAt: new Date(),
     },
     select: { id: true },
   });

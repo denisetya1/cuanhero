@@ -2,6 +2,7 @@
 
 import { CreditCard, Gift, Loader2, QrCode } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 
 type CheckoutPaymentOptionsProps = {
@@ -21,6 +22,7 @@ export default function CheckoutPaymentOptions({
 }: CheckoutPaymentOptionsProps) {
   const router = useRouter();
   const [phone, setPhone] = useState(defaultPhone);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -38,6 +40,7 @@ export default function CheckoutPaymentOptions({
           tradingAccountId,
           paymentMethod: isFree ? "free" : "qris",
           phone,
+          termsAccepted,
         }),
       });
       const result = (await response.json()) as {
@@ -123,6 +126,32 @@ export default function CheckoutPaymentOptions({
         </p>
       </div> : null}
 
+      <div className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm text-slate-300 transition hover:border-cyan-300/30">
+        <input
+          id="checkout-terms"
+          type="checkbox"
+          checked={termsAccepted}
+          onChange={(event) => setTermsAccepted(event.target.checked)}
+          className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-cyan-300"
+        />
+        <p className="leading-6">
+          <label htmlFor="checkout-terms" className="cursor-pointer">
+            Saya telah membaca dan menyetujui{" "}
+          </label>
+          <Link
+            href="/terms-and-conditions"
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-cyan-300 underline underline-offset-4 hover:text-cyan-200"
+          >
+            Syarat dan Ketentuan
+          </Link>{" "}
+          <label htmlFor="checkout-terms" className="cursor-pointer">
+            yang berlaku.
+          </label>
+        </p>
+      </div>
+
       {error ? (
         <p className="mt-4 rounded-lg border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
@@ -132,7 +161,7 @@ export default function CheckoutPaymentOptions({
       <button
         type="button"
         onClick={startPayment}
-        disabled={isLoading || (!isFree && !phone.trim())}
+        disabled={isLoading || !termsAccepted || (!isFree && !phone.trim())}
         className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 font-bold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

@@ -124,6 +124,9 @@ export default async function PublicOrderCheckoutPage({
     Number.isFinite(price) && discount > 0 && applyIntroDiscount
       ? String(price - (price * discount) / 100)
       : packageItem.price;
+  const showNextBillingAmount =
+    packageItem.code?.trim().toUpperCase() !== "FREE_TRIAL" &&
+    packageItem.recurringType.trim().toLowerCase() !== "lifetime";
 
   return (
     <section className="mx-auto w-full max-w-5xl px-4 py-10 md:px-6 md:py-16">
@@ -255,6 +258,21 @@ export default async function PublicOrderCheckoutPage({
               {formatPrice(total)}
             </span>
           </div>
+          {showNextBillingAmount ? (
+            <div className="mt-4 flex items-start justify-between gap-4 border-t border-white/10 pt-4">
+              <div>
+                <p className="text-xs font-semibold text-slate-300">
+                  Next Billing Amount
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                  Dibayar manual saat melakukan renewal.
+                </p>
+              </div>
+              <p className="shrink-0 text-sm font-bold text-cyan-300">
+                {formatPrice(packageItem.price)}
+              </p>
+            </div>
+          ) : null}
           {upgradeAccount && !applyIntroDiscount ? (
             <p className="mt-2 text-right text-xs text-slate-500">
               Renewal menggunakan harga normal tanpa diskon pembelian pertama.

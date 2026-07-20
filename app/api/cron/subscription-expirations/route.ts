@@ -5,6 +5,7 @@ import {
   PYSYNC_API_KEY,
 } from "@/lib/pysync";
 import { buildErrorResponse, buildResponse } from "@/lib/response";
+import { getSubscriptionTerminationAt } from "@/lib/subscription-expiration";
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest } from "next/server";
 
@@ -77,11 +78,12 @@ const runSubscriptionExpirations = async (req: NextRequest) => {
   }
 
   const today = getTodayUtc();
+  const now = new Date();
 
   try {
-    // endDate remains valid for the whole date. Cleanup starts the next day.
-    // Accounts with a failed runtime cleanup stay eligible for the next run.
-    const accounts = await prisma.tradingAccount.findMany({
+    // Fetch expired candidates first, then enforce the exact 3x24-hour grace
+    // period in application code because endDate is stored as a DATE column.
+    const candidates = await prisma.tradingAccount.findMany({
       where: {
         endDate: { lt: today },
         OR: [
@@ -103,6 +105,13 @@ const runSubscriptionExpirations = async (req: NextRequest) => {
         },
       },
       orderBy: { id: "asc" },
+    });
+
+    // Accounts with a failed runtime cleanup stay eligible for the next run.
+    const accounts = candidates.filter((account) => {
+      if (!account.endDate) return false;
+      const terminateAt = getSubscriptionTerminationAt(account.endDate);
+      return Boolean(terminateAt && terminateAt.getTime() <= now.getTime());
     });
 
     let terminated = 0;
@@ -178,6 +187,7 @@ const runSubscriptionExpirations = async (req: NextRequest) => {
     return buildResponse({
       date: getDateKey(today),
       timeZone: CRON_TIME_ZONE,
+      gracePeriodDays: 3,
       matched: accounts.length,
       closed,
       terminated,

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import type { LandingLang } from "./landing-content";
 import { landingContent } from "./landing-content";
 
@@ -12,7 +13,13 @@ const navItems = [
   ["faq", "#faq"],
 ] as const;
 
-export default function MobileDrawer({ lang }: { lang: LandingLang }) {
+export default function MobileDrawer({
+  lang,
+  languageHref,
+}: {
+  lang: LandingLang;
+  languageHref: string;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const isMounted = useSyncExternalStore(
     () => () => undefined,
@@ -20,6 +27,7 @@ export default function MobileDrawer({ lang }: { lang: LandingLang }) {
     () => false,
   );
   const content = landingContent[lang].nav;
+  const landingPath = lang === "en" ? "/en" : "/";
 
   const toggleDrawer = () => setIsOpen(!isOpen);
 
@@ -114,7 +122,7 @@ export default function MobileDrawer({ lang }: { lang: LandingLang }) {
                 {navItems.map(([key, href]) => (
                   <a
                     key={key}
-                    href={href}
+                    href={`${landingPath}${href}`}
                     onClick={() => setIsOpen(false)}
                     className="rounded-xl border border-transparent px-4 py-3 text-base font-semibold text-slate-200 transition hover:border-cyan-300/20 hover:bg-cyan-300/10 hover:text-cyan-200"
                   >
@@ -122,6 +130,23 @@ export default function MobileDrawer({ lang }: { lang: LandingLang }) {
                   </a>
                 ))}
               </nav>
+
+              <div className="relative mt-auto space-y-3 border-t border-white/10 p-5">
+                <Link
+                  href={languageHref}
+                  onClick={() => setIsOpen(false)}
+                  className="button-outline inline-flex h-11 w-full items-center justify-center text-sm font-bold text-white"
+                >
+                  {content.language}
+                </Link>
+                <Link
+                  href="/member/login"
+                  onClick={() => setIsOpen(false)}
+                  className="button inline-flex h-11 w-full items-center justify-center text-sm font-bold text-white"
+                >
+                  {content.memberLogin}
+                </Link>
+              </div>
             </aside>
           </>,
           document.body,

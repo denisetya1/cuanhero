@@ -120,6 +120,9 @@ export default async function AdminOrdersPage({
     select: {
       id: true,
       orderNumber: true,
+      baseAmount: true,
+      discountPercent: true,
+      discountAmount: true,
       amount: true,
       currency: true,
       type: true,
@@ -164,8 +167,8 @@ export default async function AdminOrdersPage({
   const endItem = Math.min(currentPage * PAGE_SIZE, totalOrders);
 
   return (
-    <main className="min-h-screen px-4 py-8 md:px-8">
-      <div className="mx-auto w-full max-w-7xl space-y-6">
+    <main className="min-h-screen bg-slate-50/50 p-2">
+      <div className="w-full space-y-6">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-600">
             Commerce
@@ -294,6 +297,16 @@ export default async function AdminOrdersPage({
                         </td>
                         <td className="px-5 py-4">
                           <p className="font-semibold text-slate-950">{formatMoney(order.amount, order.currency)}</p>
+                          {order.discountPercent > 0 ? (
+                            <p className="mt-1 text-xs text-emerald-600">
+                              Discount {order.discountPercent}% ({formatMoney(order.discountAmount, order.currency)})
+                            </p>
+                          ) : null}
+                          {order.discountPercent > 0 ? (
+                            <p className="mt-1 text-[10px] text-slate-400">
+                              Base {formatMoney(order.baseAmount, order.currency)}
+                            </p>
+                          ) : null}
                           <p className="mt-1 text-xs text-slate-500">
                             {[order.paymentMethod, order.paymentChannel].filter(Boolean).join(" · ") || (Number(order.amount) === 0 ? "Free" : "-")}
                           </p>
