@@ -22,8 +22,14 @@ export const sanitizeMemberRedirect = (value?: string | null) => {
     const parsed = new URL(redirect, REDIRECT_BASE_URL);
     const isMemberPath =
       parsed.pathname === "/member" || parsed.pathname.startsWith("/member/");
+    const isOrderPath =
+      parsed.pathname === "/order/checkout" ||
+      parsed.pathname === "/order/payment";
 
-    if (parsed.origin !== REDIRECT_BASE_URL || !isMemberPath) {
+    if (
+      parsed.origin !== REDIRECT_BASE_URL ||
+      (!isMemberPath && !isOrderPath)
+    ) {
       return DEFAULT_MEMBER_REDIRECT;
     }
 

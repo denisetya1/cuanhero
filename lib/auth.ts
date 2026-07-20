@@ -20,6 +20,20 @@ export const auth = betterAuth({
         resetUrl: url,
       }),
   },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => ({
+          data: {
+            ...user,
+            // Akun member boleh login untuk menyelesaikan checkout. Hak akses
+            // EA tetap ditentukan oleh trading account/subscription terpisah.
+            status: 1,
+          },
+        }),
+      },
+    },
+  },
   hooks: {
     before: createAuthMiddleware(async (context) => {
       if (context.path !== "/sign-in/email") return;

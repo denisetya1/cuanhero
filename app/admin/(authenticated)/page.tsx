@@ -35,6 +35,10 @@ const normalizeMonthlyAmount = (amount: number, recurringType?: string) => {
     return amount * 30;
   }
 
+  if (recurringType === "7d") {
+    return (amount * 30) / 7;
+  }
+
   if (recurringType === "30d") {
     return amount;
   }
@@ -207,19 +211,19 @@ const mrrCards = [
   {
     key: "estimatedMrr",
     label: "Estimated MRR",
-    description: "Active 30d licenses plus 24h licenses projected monthly",
+    description: "Active recurring licenses normalized to a monthly estimate",
     icon: CircleDollarSign,
   },
   {
     key: "activeRecurringAccounts",
     label: "Recurring Accounts",
-    description: "Active accounts with 24h or 30d recurring type",
+    description: "Active accounts with 24h, 7d, or 30d recurring type",
     icon: BarChart3,
   },
   {
     key: "dailyProjection",
-    label: "24h Projection",
-    description: "Daily licenses normalized to 30 days",
+    label: "Short-term Projection",
+    description: "24h and 7d licenses normalized to 30 days",
     icon: Clock3,
   },
   {
@@ -324,7 +328,7 @@ export default async function AdminDashboardPage() {
       activeRecurringAccounts += 1;
       estimatedMrr[currency] += monthlyAmount;
 
-      if (recurringType === "24h") {
+      if (recurringType === "24h" || recurringType === "7d") {
         dailyProjection[currency] += monthlyAmount;
       }
     }
@@ -439,7 +443,8 @@ export default async function AdminDashboardPage() {
             </div>
             <p className="max-w-2xl text-sm leading-6 text-slate-500">
               Calculated from active trading accounts. Lifetime licenses are
-              excluded from MRR, while 24h licenses are projected as 30 days.
+              excluded from MRR, while 24h and 7d licenses are normalized to
+              30 days.
             </p>
           </div>
 

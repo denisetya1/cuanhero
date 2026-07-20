@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   ChevronDown,
   MessageCircle,
@@ -28,7 +29,6 @@ import {
 import { useGetTradingAccounts } from "@/hooks/useTradingAccounts";
 import { handleRes } from "@/lib/response";
 import { TradingAccountStore } from "@/stores/traddingAccount";
-import { useMemberLanguage } from "@/app/member/components/MemberLanguageProvider";
 
 type EAConfiguration = {
   EnableBot: boolean;
@@ -547,16 +547,7 @@ const getMemberConfigDefaultValues = (
   ...config,
 });
 
-export default function MemberHomeDashboard({
-  whatsappNumber,
-  renewalMessageEn,
-  renewalMessageId,
-}: {
-  whatsappNumber: string;
-  renewalMessageEn: string;
-  renewalMessageId: string;
-}) {
-  const { language } = useMemberLanguage();
+export default function MemberHomeDashboard() {
   const detectedTimeZone = useSyncExternalStore(
     subscribeToTimeZone,
     getBrowserTimeZone,
@@ -598,65 +589,9 @@ export default function MemberHomeDashboard({
     selectedAccount?.package?.code === "FREE_TRIAL" ||
     selectedAccount?.package?.recurringType === "24h";
 
-  const renewalHref = useMemo(() => {
-    const number = whatsappNumber.replace(/\D/g, "");
-    if (!number || !selectedAccount) return null;
-
-    const isIndonesian = language === "id";
-    if (isFreeTrial) {
-      const message = [
-        isIndonesian
-          ? "Halo CuanHero, saya ingin melanjutkan Free Trial ke paket IB Monthly."
-          : "Hello CuanHero, I would like to continue my Free Trial with the IB Monthly package.",
-        "",
-        isIndonesian
-          ? `Akun trading: ${selectedAccount.accountId}`
-          : `Trading account: ${selectedAccount.accountId}`,
-        isIndonesian
-          ? `Paket saat ini: ${selectedAccount.package?.name || "Free Trial"}`
-          : `Current package: ${selectedAccount.package?.name || "Free Trial"}`,
-        isIndonesian
-          ? `Trial berakhir: ${formatDateOnly(selectedAccount.endDate, "id-ID")}`
-          : `Trial ends: ${formatDateOnly(selectedAccount.endDate)}`,
-        "",
-        isIndonesian
-          ? "Mohon bantu proses pendaftaran dan verifikasi akun IB saya."
-          : "Please help me register and verify my IB account.",
-      ].join("\n");
-
-      return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
-    }
-
-    const renewalMessage = isIndonesian
-      ? renewalMessageId.trim() || renewalMessageEn.trim()
-      : renewalMessageEn.trim();
-
-    const message = [
-      renewalMessage ||
-        (isIndonesian
-          ? "Halo CuanHero, saya ingin memperpanjang langganan saya."
-          : "Hello CuanHero, I would like to renew my subscription."),
-      "",
-      isIndonesian
-        ? `Akun trading: ${selectedAccount.accountId}`
-        : `Trading account: ${selectedAccount.accountId}`,
-      isIndonesian
-        ? `Paket: ${selectedAccount.package?.name || "-"}`
-        : `Package: ${selectedAccount.package?.name || "-"}`,
-      isIndonesian
-        ? `Tanggal berakhir langganan: ${formatDateOnly(selectedAccount.endDate, "id-ID")}`
-        : `Subscription end date: ${formatDateOnly(selectedAccount.endDate)}`,
-    ].join("\n");
-
-    return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
-  }, [
-    language,
-    isFreeTrial,
-    renewalMessageEn,
-    renewalMessageId,
-    selectedAccount,
-    whatsappNumber,
-  ]);
+  const upgradeHref = selectedAccount
+    ? `/order?tradingAccountId=${selectedAccount.id}`
+    : null;
 
   const showRenewButton = useMemo(() => {
     const daysRemaining = getDaysUntilDate(selectedAccount?.endDate);
@@ -1024,16 +959,16 @@ export default function MemberHomeDashboard({
                 <p className="font-semibold text-white">
                   {selectedAccount?.package?.name || "-"}
                 </p>
-                {isFreeTrial && renewalHref && (
+                {isFreeTrial && upgradeHref && (
                   <Button
                     asChild
                     size="sm"
                     className="h-auto min-h-8 shrink-0 bg-emerald-500 px-3 py-1.5 text-xs font-semibold whitespace-normal text-white hover:bg-emerald-400"
                   >
-                    <a href={renewalHref} target="_blank" rel="noreferrer">
+                    <Link href={upgradeHref}>
                       <MessageCircle className="h-3.5 w-3.5" />
                       Upgrade to IB Monthly
-                    </a>
+                    </Link>
                   </Button>
                 )}
               </div>
@@ -1044,16 +979,16 @@ export default function MemberHomeDashboard({
                 <p className="font-semibold text-white">
                   {formatDateOnly(selectedAccount?.endDate)}
                 </p>
-                {!isFreeTrial && showRenewButton && renewalHref && (
+                {!isFreeTrial && showRenewButton && upgradeHref && (
                   <Button
                     asChild
                     size="sm"
                     className="h-8 shrink-0 bg-emerald-500 px-3 text-xs font-semibold text-white hover:bg-emerald-400"
                   >
-                    <a href={renewalHref} target="_blank" rel="noreferrer">
+                    <Link href={upgradeHref}>
                       <MessageCircle className="h-3.5 w-3.5" />
                       Renew
-                    </a>
+                    </Link>
                   </Button>
                 )}
               </div>

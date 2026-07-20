@@ -8,22 +8,24 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  email           String           @unique
-  name            String
-  password        String?
-  phoneNumber     String?          @map("phone_number")
-  status          Int              @default(0) @db.TinyInt
-  role            String           @default("MEMBER")
-  createdAt       DateTime         @default(now())
-  emailVerified   Boolean          @map("email_verified")
-  image           String?
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at")
-  createdBy       String?          @map("created_by")
-  updatedBy       String?          @map("updated_by")
-  accounts        Account[]
-  sessions        Session[]
-  tradingAccounts TradingAccount[]
+  id                 String           @id @default(cuid())
+  email              String           @unique
+  name               String
+  password           String?
+  phoneNumber        String?          @map("phone_number")
+  status             Int              @default(0) @db.TinyInt
+  role               String           @default("MEMBER")
+  createdAt          DateTime         @default(now())
+  emailVerified      Boolean          @map("email_verified")
+  image              String?
+  updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at")
+  createdBy          String?          @map("created_by")
+  updatedBy          String?          @map("updated_by")
+  freeTrialClaimedAt DateTime?        @map("free_trial_claimed_at")
+  accounts           Account[]
+  sessions           Session[]
+  tradingAccounts    TradingAccount[]
+  orders             Order[]
 
   @@map("users")
 }
@@ -94,6 +96,7 @@ model Package {
   orderNumber     Int              @default(9999) @map("order_number")
   paymentRecords  PaymentRecord[]
   tradingAccounts TradingAccount[]
+  orders          Order[]
 
   @@map("packages")
 }
@@ -113,6 +116,7 @@ model ExpertAdvisor {
   isActive        Boolean          @default(true) @map("is_active")
   orderNumber     Int              @default(9999) @map("order_number")
   tradingAccounts TradingAccount[]
+  orders          Order[]
 
   @@map("expert_advisors")
 }
@@ -147,6 +151,8 @@ model TradingAccount {
   renewalNotifications SubscriptionRenewalNotification[]
   server               Server                            @relation(fields: [serverId], references: [id])
   user                 User                              @relation(fields: [userId], references: [id])
+  setupRequest         TradingAccountSetupRequest?
+  upgradeOrders        Order[]                           @relation("OrderUpgradeTradingAccount")
 
   @@index([expertAdvisorId], map: "trading_accounts_expert_advisor_id_fkey")
   @@index([packageId], map: "trading_accounts_package_id_fkey")
@@ -194,6 +200,66 @@ model PaymentRecord {
   @@index([packageId], map: "payment_records_package_id_fkey")
   @@index([tradingAccountId], map: "payment_records_trading_account_id_fkey")
   @@map("payment_records")
+}
+
+model Order {
+  id                    Int                         @id @default(autoincrement())
+  orderNumber           String                      @unique @map("order_number")
+  userId                String                      @map("user_id")
+  expertAdvisorId       Int                         @map("expert_advisor_id")
+  packageId             Int                         @map("package_id")
+  tradingAccountId      Int?                        @map("trading_account_id")
+  amount                Decimal                     @db.Decimal(12, 2)
+  currency              String                      @default("IDR")
+  type                  String                      @default("NEW")
+  status                String                      @default("PENDING")
+  paymentProvider       String                      @default("IPAYMU") @map("payment_provider")
+  paymentMethod         String?                     @map("payment_method")
+  paymentChannel        String?                     @map("payment_channel")
+  paymentNumber         String?                     @map("payment_number") @db.Text
+  paymentName           String?                     @map("payment_name")
+  providerSessionId     String?                     @unique @map("provider_session_id")
+  providerTransactionId String?                     @map("provider_transaction_id")
+  paymentUrl            String?                     @map("payment_url") @db.Text
+  providerMessage       String?                     @map("provider_message") @db.Text
+  fee                   Decimal?                    @db.Decimal(12, 2)
+  expiresAt             DateTime?                   @map("expires_at")
+  paidAt                DateTime?                   @map("paid_at")
+  createdAt             DateTime                    @default(now()) @map("created_at")
+  updatedAt             DateTime                    @default(now()) @updatedAt @map("updated_at")
+  expertAdvisor         ExpertAdvisor               @relation(fields: [expertAdvisorId], references: [id])
+  package               Package                     @relation(fields: [packageId], references: [id])
+  user                  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tradingAccount        TradingAccount?             @relation("OrderUpgradeTradingAccount", fields: [tradingAccountId], references: [id], onDelete: SetNull)
+  setupRequest          TradingAccountSetupRequest?
+
+  @@index([userId, createdAt], map: "orders_user_created_at_idx")
+  @@index([expertAdvisorId], map: "orders_expert_advisor_id_fkey")
+  @@index([packageId], map: "orders_package_id_fkey")
+  @@index([tradingAccountId], map: "orders_trading_account_id_fkey")
+  @@index([status], map: "orders_status_idx")
+  @@index([providerTransactionId], map: "orders_provider_transaction_id_idx")
+  @@map("orders")
+}
+
+model TradingAccountSetupRequest {
+  id               Int             @id @default(autoincrement())
+  orderId          Int             @unique @map("order_id")
+  accountId        String          @unique @map("account_id")
+  accountPassword  String          @map("account_password") @db.Text
+  accountServer    String          @map("account_server")
+  status           String          @default("PENDING")
+  tradingAccountId Int?            @unique @map("trading_account_id")
+  reviewedBy       String?         @map("reviewed_by")
+  reviewedAt       DateTime?       @map("reviewed_at")
+  adminNote        String?         @map("admin_note") @db.Text
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at")
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tradingAccount   TradingAccount? @relation(fields: [tradingAccountId], references: [id])
+
+  @@index([status, createdAt], map: "trading_account_setup_requests_status_created_idx")
+  @@map("trading_account_setup_requests")
 }
 
 model Server {

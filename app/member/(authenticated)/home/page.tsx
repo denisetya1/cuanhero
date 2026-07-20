@@ -16,22 +16,20 @@ export default async function DashboardPage() {
     redirect("/");
   }
 
-  const settings = await prisma.appSetting.findUnique({
-    where: { id: 1 },
-    select: {
-      whatsappNumber: true,
-      renewalMessageEn: true,
-      renewalMessageId: true,
+  const activeTradingAccounts = await prisma.tradingAccount.count({
+    where: {
+      userId: session.user.id,
+      status: 1,
     },
   });
 
+  if (activeTradingAccounts === 0) {
+    redirect("/member/orders");
+  }
+
   return (
     <div className="p-0">
-      <MemberHomeDashboard
-        whatsappNumber={settings?.whatsappNumber || ""}
-        renewalMessageEn={settings?.renewalMessageEn || ""}
-        renewalMessageId={settings?.renewalMessageId || ""}
-      />
+      <MemberHomeDashboard />
     </div>
   );
 }

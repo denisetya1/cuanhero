@@ -2,7 +2,7 @@
 
 import { handleRes } from "@/lib/response";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Loader2, MessageCircle } from "lucide-react";
+import { Check, Loader2, ShoppingCart } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getLocalizedText } from "@/lib/localized-text";
 import type { LandingLang } from "./landing-content";
@@ -68,6 +68,7 @@ const getDiscountedPrice = (price: string, discountPercent?: number | null) => {
 const formatRecurringType = (value: string, lang: LandingLang) => {
   const labels: Record<string, Record<LandingLang, string>> = {
     "24h": { id: "24 jam", en: "24 hours" },
+    "7d": { id: "7 hari", en: "7 days" },
     "30d": { id: "30 hari", en: "30 days" },
     lifetime: { id: "Seumur hidup", en: "Lifetime" },
   };
@@ -197,34 +198,6 @@ export default function PricingTabs({ lang }: { lang: LandingLang }) {
   const activeEa = useMemo(() => {
     return data?.expertAdvisors.find((ea) => ea.id === activeEaId) ?? null;
   }, [activeEaId, data?.expertAdvisors]);
-
-  const getOrderWhatsappHref = (packageItem: PackageItem) => {
-    const number = data?.settings.whatsappNumber.replace(/\D/g, "") || "";
-    if (!number || !activeEa) return null;
-
-    const template =
-      (lang === "id"
-        ? data?.settings.orderMessageId
-        : data?.settings.orderMessageEn
-      )?.trim() ||
-      (lang === "id"
-        ? "Halo CuanHero, saya ingin memesan lisensi EA."
-        : "Hello CuanHero, I would like to order an EA license.");
-    const discountedPrice = getDiscountedPrice(
-      packageItem.price,
-      packageItem.discountPercent,
-    );
-    const message = [
-      template,
-      "",
-      `EA: ${activeEa.name}`,
-      `${lang === "id" ? "Paket" : "Package"}: ${packageItem.name}`,
-      `${lang === "id" ? "Durasi" : "Duration"}: ${formatRecurringType(packageItem.recurringType, lang)}`,
-      `${lang === "id" ? "Harga" : "Price"}: ${formatPrice(discountedPrice || packageItem.price, lang)}`,
-    ].join("\n");
-
-    return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
-  };
 
   return (
     <section id="pricing" className="landing-reveal relative mx-auto w-full max-w-7xl px-4 py-20 md:px-8">
@@ -398,10 +371,8 @@ export default function PricingTabs({ lang }: { lang: LandingLang }) {
                         ))}
                       </ul>
                       <a
-                        href={getOrderWhatsappHref(packageItem) || undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-disabled={!getOrderWhatsappHref(packageItem)}
+                        href={`${lang === "en" ? "/en" : ""}/order?ea=${activeEa?.id || ""}&package=${packageItem.id}`}
+                        aria-disabled={!activeEa}
                         className={`mt-7 inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 border text-sm font-bold transition hover:text-white aria-disabled:pointer-events-none aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${
                           packageButtonClasses[
                             index % packageButtonClasses.length
@@ -409,7 +380,7 @@ export default function PricingTabs({ lang }: { lang: LandingLang }) {
                         }`}
                       >
                         {copy.order}
-                        <MessageCircle className="h-4 w-4" />
+                        <ShoppingCart className="h-4 w-4" />
                       </a>
                     </motion.div>
                   ))

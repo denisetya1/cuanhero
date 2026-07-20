@@ -33,6 +33,7 @@ const tradingAccountSelect = {
   },
   expertAdvisor: {
     select: {
+      id: true,
       name: true,
       defaultConfig: true,
     },

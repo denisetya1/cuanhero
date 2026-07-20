@@ -20,6 +20,10 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginForm({ redirectTo }: { redirectTo?: string }) {
   const safeRedirectTo = sanitizeMemberRedirect(redirectTo);
+  const showOrderRegistration = safeRedirectTo.startsWith(
+    "/order/checkout",
+  );
+  const registerHref = safeRedirectTo;
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const {
@@ -128,10 +132,12 @@ export default function LoginForm({ redirectTo }: { redirectTo?: string }) {
         {loading ? "Verifying..." : "Member Login"}
       </Button>
 
-      <p className="hidden text-center text-xs text-slate-500">
+      <p
+        className={`${showOrderRegistration ? "block" : "hidden"} text-center text-xs text-slate-500`}
+      >
         Don&apos;t have an account?{" "}
-        <Link href="/member/register" className="text-cyan-300 hover:text-cyan-200">
-          Register now
+        <Link href={registerHref} className="text-cyan-300 hover:text-cyan-200">
+          Back to checkout
         </Link>
       </p>
     </form>

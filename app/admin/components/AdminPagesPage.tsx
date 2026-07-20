@@ -71,6 +71,16 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 120);
 
+// Keep a trailing hyphen while the admin is typing (for example `trading-`).
+// The final value is normalized on blur and once more by the API.
+const sanitizeSlugInput = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+/g, "")
+    .slice(0, 120);
+
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
@@ -337,8 +347,9 @@ export default function AdminPagesPage() {
                     value={form.slug}
                     onChange={(event) => {
                       setSlugManuallyEdited(true);
-                      updateField("slug", slugify(event.target.value));
+                      updateField("slug", sanitizeSlugInput(event.target.value));
                     }}
+                    onBlur={() => updateField("slug", slugify(form.slug))}
                     placeholder="terms-and-conditions"
                     className="h-9 flex-1 bg-transparent px-3 text-sm outline-none"
                   />
@@ -389,7 +400,7 @@ export default function AdminPagesPage() {
                 />
               </label>
 
-              <label className="block">
+              <div className="block">
                 <span className="mb-2 block text-sm font-medium text-slate-700">Page Content</span>
                 <div className="cms-editor overflow-hidden rounded-lg border border-slate-200 bg-white">
                   <Editor
@@ -412,7 +423,7 @@ export default function AdminPagesPage() {
                     </Toolbar>
                   </Editor>
                 </div>
-              </label>
+              </div>
 
               <div className="grid gap-5 lg:grid-cols-2">
                 <label>

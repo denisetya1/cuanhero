@@ -98,6 +98,35 @@ The application defaults to the `login` request field for v2 and `email` for
 the legacy endpoint. Use `EXNESS_AUTH_LOGIN_FIELD` to override this when
 required by the live Swagger schema.
 
+## iPaymu checkout
+
+Checkout menggunakan API Direct Payment iPaymu dengan metode QRIS. QR code
+pembayaran ditampilkan pada halaman status order tanpa redirect ke hosted
+payment page iPaymu. Biaya transaksi menggunakan `feeDirection: MERCHANT`,
+sehingga pelanggan tetap membayar sesuai harga package. API key
+hanya digunakan dari server. Gunakan credential sandbox untuk pengujian dan
+ganti environment ke `production` setelah siap live:
+
+```env
+IPAYMU_ENV=sandbox
+IPAYMU_VA=your-ipaymu-va
+IPAYMU_API_KEY=your-ipaymu-api-key
+```
+
+Callback URL yang didaftarkan/digunakan adalah:
+
+```text
+https://cuanhero.com/api/payments/ipaymu/callback
+```
+
+Set callback notification di dashboard iPaymu ke JSON bila tersedia. Setelah
+schema berubah, sinkronkan database menggunakan workflow project ini:
+
+```bash
+npx prisma db push
+npx prisma generate
+```
+
 ## Subscription renewal cron
 
 The renewal cron sends email reminders 7, 3, and 1 day before a subscription

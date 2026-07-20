@@ -21,6 +21,7 @@ export const GET = async () => {
         orderBy: [{ orderNumber: "asc" }, { createdAt: "asc" }],
         select: {
           id: true,
+          code: true,
           name: true,
           description: true,
           features: true,

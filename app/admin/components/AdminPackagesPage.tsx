@@ -72,7 +72,7 @@ const adminSelectContentClass =
 const adminSelectItemClass =
   "rounded-md text-gray-700 focus:!bg-blue-50 focus:!text-blue-700 focus:[&_*]:!text-blue-700 data-[highlighted]:!bg-blue-50 data-[highlighted]:!text-blue-700 data-[highlighted]:[&_*]:!text-blue-700 data-[state=checked]:!bg-blue-50 data-[state=checked]:!text-blue-700 data-[state=checked]:[&_*]:!text-blue-700 [&_svg]:!text-blue-600";
 
-const recurringTypeOptions = ["24h", "30d", "lifetime"];
+const recurringTypeOptions = ["24h", "7d", "30d", "lifetime"];
 
 const packageSchema = z.object({
   code: z
