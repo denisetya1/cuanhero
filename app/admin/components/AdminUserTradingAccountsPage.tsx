@@ -9,6 +9,7 @@ import {
   CalendarIcon,
   Eye,
   EyeOff,
+  ImageIcon,
   Loader2,
   Mail,
   Pause,
@@ -16,6 +17,7 @@ import {
   Play,
   Plus,
   Power,
+  RefreshCw,
   Rocket,
   Trash2,
   WalletCards,
@@ -342,6 +344,11 @@ export default function AdminUserTradingAccountsPage({
     useState<TradingAccountItem | null>(null);
   const [configAccount, setConfigAccount] =
     useState<TradingAccountItem | null>(null);
+  const [screenshotAccount, setScreenshotAccount] =
+    useState<TradingAccountItem | null>(null);
+  const [isScreenshotLoading, setIsScreenshotLoading] = useState(false);
+  const [screenshotError, setScreenshotError] = useState(false);
+  const [screenshotRequestId, setScreenshotRequestId] = useState(0);
   const [configText, setConfigText] = useState("");
   const [configMessage, setConfigMessage] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -776,6 +783,21 @@ export default function AdminUserTradingAccountsPage({
     }
   };
 
+  const refreshScreenshot = () => {
+    setScreenshotError(false);
+    setIsScreenshotLoading(true);
+    setScreenshotRequestId(Date.now());
+  };
+
+  const openScreenshot = (account: TradingAccountItem) => {
+    setScreenshotAccount(account);
+    refreshScreenshot();
+  };
+
+  const screenshotUrl = screenshotAccount
+    ? `/api/admin/trading-accounts/${screenshotAccount.id}/screenshot?v=${screenshotRequestId}`
+    : "";
+
   return (
     <div className="min-h-screen bg-slate-50/50 p-2">
       <section className="overflow-hidden rounded-md border border-gray-100 bg-white shadow-sm">
@@ -994,6 +1016,20 @@ export default function AdminUserTradingAccountsPage({
                         <Button
                           type="button"
                           variant="outline"
+                          title="View latest MT5 screenshot"
+                          disabled={
+                            runtimeAction !== null ||
+                            ![1, 2, 3].includes(account.eaStatus)
+                          }
+                          onClick={() => openScreenshot(account)}
+                          className="h-7 gap-1 rounded-md border-cyan-200 bg-white px-2 text-xs text-cyan-700 hover:bg-cyan-50 hover:text-cyan-700"
+                        >
+                          <ImageIcon className="h-3.5 w-3.5" />
+                          Screenshot
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
                           title={
                             account.eaStatus === 1
                               ? "Email the user that the robot is ready"
@@ -1118,6 +1154,82 @@ export default function AdminUserTradingAccountsPage({
           onPageChange={setCurrentPage}
         />
       </section>
+
+      <Dialog
+        open={screenshotAccount !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setScreenshotAccount(null);
+            setScreenshotError(false);
+            setIsScreenshotLoading(false);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto rounded-md border border-slate-200 bg-white p-0 text-gray-900 shadow-xl">
+          <DialogHeader className="border-b border-gray-100 bg-gray-50 px-5 py-4 pr-12">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <DialogTitle>MT5 Chart Preview</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Trading account {screenshotAccount?.accountId || "-"}. The
+                  EA refreshes this screenshot every 30 seconds.
+                </DialogDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isScreenshotLoading}
+                onClick={refreshScreenshot}
+                className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-700"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${isScreenshotLoading ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="p-5">
+            <div className="relative flex min-h-56 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-950 sm:min-h-96">
+              {isScreenshotLoading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/75 text-sm text-slate-100 backdrop-blur-sm">
+                  <RefreshCw className="h-7 w-7 animate-spin text-cyan-300" />
+                  Loading the latest screenshot...
+                </div>
+              )}
+
+              {screenshotError ? (
+                <div className="max-w-md px-6 py-12 text-center text-slate-100">
+                  <ImageIcon className="mx-auto h-10 w-10 text-slate-500" />
+                  <p className="mt-4 font-semibold">
+                    Screenshot is not available yet
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Make sure the latest EA is running, wait up to 30 seconds,
+                    then refresh this preview.
+                  </p>
+                </div>
+              ) : screenshotUrl ? (
+                // The authenticated route cannot use the Next/Image optimizer.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={screenshotUrl}
+                  src={screenshotUrl}
+                  alt={`MT5 chart for trading account ${screenshotAccount?.accountId || ""}`}
+                  className="max-h-[72vh] w-full object-contain"
+                  onLoad={() => setIsScreenshotLoading(false)}
+                  onError={() => {
+                    setIsScreenshotLoading(false);
+                    setScreenshotError(true);
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={terminateAccount !== null}

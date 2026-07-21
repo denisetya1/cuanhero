@@ -7,6 +7,8 @@ import {
   ChevronDown,
   CircleArrowUp,
   CreditCard,
+  ImageIcon,
+  RefreshCw,
   RotateCcw,
   ShieldAlert,
 } from "lucide-react";
@@ -17,6 +19,13 @@ import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Select,
@@ -583,6 +592,10 @@ export default function MemberHomeDashboard() {
   const accountQuery = searchParams.get("account");
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [isScreenshotOpen, setIsScreenshotOpen] = useState(false);
+  const [isScreenshotLoading, setIsScreenshotLoading] = useState(false);
+  const [screenshotError, setScreenshotError] = useState(false);
+  const [screenshotRequestId, setScreenshotRequestId] = useState(0);
   const tradingAccounts: TradingAccount[] = useMemo(
     () =>
       ((data?.data || []) as TradingAccount[]).filter(
@@ -645,6 +658,11 @@ export default function MemberHomeDashboard() {
 
   const currentEAStatus = selectedAccount?.eaStatus ?? 0;
   const botStatus = getBotStatus(currentEAStatus);
+  const canViewScreenshot =
+    Boolean(selectedAccount) && currentEAStatus !== 0 && currentEAStatus !== 4;
+  const screenshotUrl = selectedAccount
+    ? `/api/member/trading-accounts/${selectedAccount.id}/screenshot?v=${screenshotRequestId}`
+    : "";
   const isConfigLocked = isSubscriptionConfigLocked(selectedAccount?.endDate);
   const config = useMemo(
     () => parseConfig(selectedAccount?.eaConfiguration, timeZoneOffsetMinutes),
@@ -659,6 +677,18 @@ export default function MemberHomeDashboard() {
   useEffect(() => {
     configForm.reset(getMemberConfigDefaultValues(config));
   }, [config, configForm, selectedAccount?.id]);
+
+  const refreshScreenshot = () => {
+    setScreenshotError(false);
+    setIsScreenshotLoading(true);
+    setScreenshotRequestId(Date.now());
+  };
+
+  const openScreenshot = () => {
+    if (!canViewScreenshot) return;
+    refreshScreenshot();
+    setIsScreenshotOpen(true);
+  };
 
   const handleResetConfig = () => {
     if (isConfigLocked) return;
@@ -1053,15 +1083,17 @@ export default function MemberHomeDashboard() {
                   {selectedAccount?.expertAdvisor?.name || "Expert Advisor"}
                 </h2>
               </div>
-              <div className="flex items-center gap-3 rounded-2xl border border-cyan-400/20 bg-black/25 px-4 py-3 shadow-inner shadow-black/30">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${botStatus.dotClass}`}
-                />
-                <p
-                  className={`text-xs font-bold uppercase tracking-[0.24em] ${botStatus.textClass}`}
-                >
-                  {botStatus.label}
-                </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-3 rounded-2xl border border-cyan-400/20 bg-black/25 px-4 py-3 shadow-inner shadow-black/30">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${botStatus.dotClass}`}
+                  />
+                  <p
+                    className={`text-xs font-bold uppercase tracking-[0.24em] ${botStatus.textClass}`}
+                  >
+                    {botStatus.label}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -1074,6 +1106,17 @@ export default function MemberHomeDashboard() {
               <p className="mt-1 font-semibold text-white">
                 {formatDate(selectedAccount?.lastSync)}
               </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canViewScreenshot}
+                onClick={openScreenshot}
+                className="mt-3 border-cyan-400/30 bg-cyan-400/5 text-cyan-100 hover:bg-cyan-400/15 hover:text-white"
+              >
+                <ImageIcon className="h-4 w-4" />
+                View Screenshot
+              </Button>
             </div>
           </div>
         </section>
@@ -1171,6 +1214,83 @@ export default function MemberHomeDashboard() {
         </section>
         <div aria-hidden="true" className="h-0 lg:h-16" />
       </form>
+
+      <Dialog
+        open={isScreenshotOpen}
+        onOpenChange={(open) => {
+          setIsScreenshotOpen(open);
+          if (!open) {
+            setScreenshotError(false);
+            setIsScreenshotLoading(false);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-cyan-400/25 bg-[rgba(3,10,24,0.98)] p-4 text-white shadow-[0_0_45px_rgba(0,217,255,0.18)] sm:p-5">
+          <DialogHeader className="pr-10">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <DialogTitle className="text-lg text-white">
+                  MT5 Chart Preview
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-slate-400">
+                  Trading account {selectedAccount?.accountId || "-"}. The EA
+                  refreshes this screenshot every 30 seconds.
+                </DialogDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isScreenshotLoading}
+                onClick={refreshScreenshot}
+                className="border-cyan-400/30 bg-cyan-400/5 text-cyan-100 hover:bg-cyan-400/15 hover:text-white"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${isScreenshotLoading ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="relative flex min-h-56 items-center justify-center overflow-hidden rounded-xl border border-cyan-400/20 bg-black/55 sm:min-h-96">
+            {isScreenshotLoading && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/65 text-sm text-cyan-100 backdrop-blur-sm">
+                <RefreshCw className="h-7 w-7 animate-spin text-cyan-300" />
+                Loading the latest screenshot...
+              </div>
+            )}
+
+            {screenshotError ? (
+              <div className="max-w-md px-6 py-12 text-center">
+                <ImageIcon className="mx-auto h-10 w-10 text-slate-500" />
+                <p className="mt-4 font-semibold text-white">
+                  Screenshot is not available yet
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Make sure the latest EA is running, wait up to 30 seconds,
+                  then try refreshing this preview.
+                </p>
+              </div>
+            ) : screenshotUrl ? (
+              // The authenticated same-origin route cannot use Next/Image's
+              // server-side optimizer because it needs the member session.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={screenshotUrl}
+                src={screenshotUrl}
+                alt={`MT5 chart for trading account ${selectedAccount?.accountId || ""}`}
+                className="max-h-[72vh] w-full object-contain"
+                onLoad={() => setIsScreenshotLoading(false)}
+                onError={() => {
+                  setIsScreenshotLoading(false);
+                  setScreenshotError(true);
+                }}
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
