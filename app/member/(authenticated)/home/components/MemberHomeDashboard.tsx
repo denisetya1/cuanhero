@@ -1225,7 +1225,7 @@ export default function MemberHomeDashboard() {
           }
         }}
       >
-        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-cyan-400/25 bg-[rgba(3,10,24,0.98)] p-4 text-white shadow-[0_0_45px_rgba(0,217,255,0.18)] sm:p-5">
+        <DialogContent className="max-h-[96dvh] w-full max-w-[calc(100vw-1rem)] overflow-y-auto border-cyan-400/25 bg-[rgba(3,10,24,0.98)] p-3 text-white shadow-[0_0_45px_rgba(0,217,255,0.18)] sm:max-w-[94vw] sm:p-5 xl:max-w-7xl">
           <DialogHeader className="pr-10">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -1280,7 +1280,7 @@ export default function MemberHomeDashboard() {
                 key={screenshotUrl}
                 src={screenshotUrl}
                 alt={`MT5 chart for trading account ${selectedAccount?.accountId || ""}`}
-                className="max-h-[72vh] w-full object-contain"
+                className="max-h-[calc(96dvh-8rem)] w-full object-contain"
                 onLoad={() => setIsScreenshotLoading(false)}
                 onError={() => {
                   setIsScreenshotLoading(false);

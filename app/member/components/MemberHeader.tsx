@@ -55,13 +55,13 @@ const MemberHeader = () => {
     <header className="sticky top-0 z-40 border-b border-cyan-400/15 bg-[#040814]/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-200 items-center justify-between px-4 md:h-18 md:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href="/member/home" className="shrink-0 md:hidden">
+          <Link href="/member/home" className="shrink-0">
             <Image
               src="/images/logo-small.png"
               alt="CuanHero"
               width={44}
               height={44}
-              className="h-9 w-9 object-contain"
+              className="h-9 w-9 object-contain md:h-10 md:w-10"
               priority
             />
           </Link>
