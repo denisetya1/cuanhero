@@ -15,12 +15,19 @@ const serverSelect = {
   ipAddress: true,
   domain: true,
   status: true,
+  maxAccounts: true,
   orderNumber: true,
   createdAt: true,
   updatedAt: true,
   _count: {
     select: {
-      tradingAccounts: true,
+      tradingAccounts: {
+        where: {
+          status: {
+            not: 4,
+          },
+        },
+      },
     },
   },
 };
@@ -75,6 +82,7 @@ export const PATCH = async (
   const name = String(body.name || "").trim();
   const ipAddress = String(body.ipAddress || "").trim();
   const status = Number(body.status ?? 1);
+  const maxAccounts = Number(body.maxAccounts ?? 4);
   const orderNumber = Number(body.orderNumber ?? 9999);
 
   if (!id || !name || !ipAddress) {
@@ -89,6 +97,14 @@ export const PATCH = async (
     return buildErrorResponse(
       "VALIDATION_ERROR",
       "Invalid server status.",
+      [],
+    );
+  }
+
+  if (!Number.isInteger(maxAccounts) || maxAccounts < 1) {
+    return buildErrorResponse(
+      "VALIDATION_ERROR",
+      "Max accounts must be at least 1.",
       [],
     );
   }
@@ -150,6 +166,7 @@ export const PATCH = async (
         name,
         ipAddress,
         status,
+        maxAccounts,
         orderNumber,
         updatedBy: session.user.id,
       },

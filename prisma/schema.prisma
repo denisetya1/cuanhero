@@ -153,6 +153,7 @@ model TradingAccount {
   user                 User                              @relation(fields: [userId], references: [id])
   setupRequest         TradingAccountSetupRequest?
   upgradeOrders        Order[]                           @relation("OrderUpgradeTradingAccount")
+  deploymentJobs       DeploymentJob[]
 
   @@index([expertAdvisorId], map: "trading_accounts_expert_advisor_id_fkey")
   @@index([packageId], map: "trading_accounts_package_id_fkey")
@@ -261,9 +262,36 @@ model TradingAccountSetupRequest {
   updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at")
   order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   tradingAccount   TradingAccount? @relation(fields: [tradingAccountId], references: [id])
+  deploymentJob    DeploymentJob?
 
   @@index([status, createdAt], map: "trading_account_setup_requests_status_created_idx")
   @@map("trading_account_setup_requests")
+}
+
+model DeploymentJob {
+  id               Int                        @id @default(autoincrement())
+  setupRequestId   Int                        @unique @map("setup_request_id")
+  tradingAccountId Int?                       @map("trading_account_id")
+  serverId         Int?                       @map("server_id")
+  action           String                     @default("DEPLOY")
+  status           String                     @default("QUEUED")
+  attempts         Int                        @default(0)
+  maxAttempts      Int                        @default(5) @map("max_attempts")
+  errorMessage     String?                    @map("error_message") @db.Text
+  nextRetryAt      DateTime?                  @map("next_retry_at")
+  queuedAt         DateTime                   @default(now()) @map("queued_at")
+  startedAt        DateTime?                  @map("started_at")
+  completedAt      DateTime?                  @map("completed_at")
+  createdAt        DateTime                   @default(now()) @map("created_at")
+  updatedAt        DateTime                   @default(now()) @updatedAt @map("updated_at")
+  setupRequest     TradingAccountSetupRequest @relation(fields: [setupRequestId], references: [id], onDelete: Cascade)
+  tradingAccount   TradingAccount?            @relation(fields: [tradingAccountId], references: [id], onDelete: SetNull)
+  server           Server?                    @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextRetryAt], map: "deployment_jobs_status_retry_idx")
+  @@index([serverId], map: "deployment_jobs_server_id_idx")
+  @@index([tradingAccountId], map: "deployment_jobs_trading_account_id_idx")
+  @@map("deployment_jobs")
 }
 
 model Server {
@@ -276,9 +304,11 @@ model Server {
   createdBy           String?              @map("created_by")
   updatedBy           String?              @map("updated_by")
   status              Int                  @default(0) @db.TinyInt
+  maxAccounts         Int                  @default(4) @map("max_accounts")
   orderNumber         Int                  @default(9999) @map("order_number")
   tradingAccounts     TradingAccount[]
   runtimeHealthIssues RuntimeHealthIssue[]
+  deploymentJobs      DeploymentJob[]
 
   @@map("servers")
 }

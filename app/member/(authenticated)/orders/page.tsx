@@ -206,8 +206,14 @@ export default async function MemberOrdersPage() {
                           >
                             <Settings2 className="h-4 w-4" />
                             {order.setupRequest.status === "COMPLETED"
-                              ? "Trading Account Setup"
-                              : "Setup Requested"}
+                              ? "Trading Account Ready"
+                              : order.setupRequest.status === "DEPLOYING"
+                                ? "Setting Up MT5..."
+                                : order.setupRequest.status === "RETRY"
+                                  ? "Retrying Setup..."
+                                  : order.setupRequest.status === "FAILED"
+                                    ? "Setup Failed"
+                                    : "Queued for Setup"}
                           </button>
                         ) : (
                           <Link

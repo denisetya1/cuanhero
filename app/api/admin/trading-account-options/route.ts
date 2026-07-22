@@ -59,9 +59,16 @@ export const GET = async () => {
       select: {
         id: true,
         name: true,
+        status: true,
+        maxAccounts: true,
       },
     }),
     prisma.tradingAccount.findMany({
+      where: {
+        status: {
+          not: 4,
+        },
+      },
       select: {
         serverId: true,
       },
@@ -86,6 +93,8 @@ export const GET = async () => {
     servers: servers.map((server) => ({
       ...server,
       tradingAccountCount: serverCountMap.get(server.id) || 0,
+      hasCapacity:
+        (serverCountMap.get(server.id) || 0) < server.maxAccounts,
     })),
   });
 };

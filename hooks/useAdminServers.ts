@@ -5,6 +5,7 @@ export type AdminServerPayload = {
   name: string;
   ipAddress: string;
   status: number;
+  maxAccounts: number;
   orderNumber: number;
 };
 

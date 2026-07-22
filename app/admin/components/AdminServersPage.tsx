@@ -52,6 +52,7 @@ type ServerItem = {
   ipAddress: string;
   domain?: string | null;
   status: number;
+  maxAccounts: number;
   orderNumber: number;
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -76,6 +77,16 @@ const serverSchema = z.object({
   name: z.string().trim().min(1, "Server name is required."),
   ipAddress: z.string().trim().min(1, "IP address is required."),
   status: z.enum(["0", "1"]),
+  maxAccounts: z
+    .string()
+    .trim()
+    .min(1, "Max accounts is required.")
+    .refine(
+      (value) => Number.isInteger(Number(value)) && Number(value) >= 1,
+      {
+        message: "Max accounts must be at least 1.",
+      },
+    ),
   orderNumber: z
     .string()
     .trim()
@@ -94,6 +105,7 @@ const serverDefaultValues: ServerFormValues = {
   name: "",
   ipAddress: "",
   status: "1",
+  maxAccounts: "4",
   orderNumber: "9999",
 };
 
@@ -189,6 +201,7 @@ export default function AdminServersPage() {
       name: server.name || "",
       ipAddress: server.ipAddress,
       status: server.status === 1 ? "1" : "0",
+      maxAccounts: String(server.maxAccounts),
       orderNumber: String(server.orderNumber),
     });
     setOpenEditDialog(true);
@@ -254,6 +267,7 @@ export default function AdminServersPage() {
       name: values.name.trim(),
       ipAddress: values.ipAddress.trim(),
       status: Number(values.status),
+      maxAccounts: Number(values.maxAccounts),
       orderNumber: Number(values.orderNumber),
     };
 
@@ -287,6 +301,7 @@ export default function AdminServersPage() {
         name: values.name.trim(),
         ipAddress: values.ipAddress.trim(),
         status: Number(values.status),
+        maxAccounts: Number(values.maxAccounts),
         orderNumber: Number(values.orderNumber),
       });
       handleEditDialogChange(false);
@@ -372,6 +387,23 @@ export default function AdminServersPage() {
         {form.formState.errors.ipAddress && (
           <span className="text-xs text-red-600">
             {form.formState.errors.ipAddress.message}
+          </span>
+        )}
+      </label>
+
+      <label className="block space-y-2.5">
+        <span className="text-sm font-medium text-gray-700">Max Accounts</span>
+        <Input
+          type="number"
+          min="1"
+          step="1"
+          {...form.register("maxAccounts")}
+          placeholder="4"
+          className={adminInputClass}
+        />
+        {form.formState.errors.maxAccounts && (
+          <span className="text-xs text-red-600">
+            {form.formState.errors.maxAccounts.message}
           </span>
         )}
       </label>
@@ -511,7 +543,8 @@ export default function AdminServersPage() {
                       </p>
                     </td>
                     <td className="px-5 py-4 text-gray-600">
-                      {server._count.tradingAccounts} accounts
+                      {server._count.tradingAccounts} / {server.maxAccounts}{" "}
+                      accounts
                     </td>
                     <td className="px-5 py-4 text-gray-500">
                       {formatDate(server.createdAt)}

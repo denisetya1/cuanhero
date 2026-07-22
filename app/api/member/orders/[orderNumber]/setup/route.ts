@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { enqueueDeploymentJob } from "@/lib/deployment-queue";
 import { encryptText } from "@/lib/encryption";
 import { verifyExnessPartnerAccount } from "@/lib/exness-partner";
 import { IB_VERIFICATION_PACKAGE_CODES } from "@/lib/ib-verification";
@@ -152,21 +153,48 @@ export const POST = async (
   }
 
   try {
-    const setupRequest = await prisma.tradingAccountSetupRequest.create({
-      data: {
-        orderId: order.id,
-        accountId,
-        accountPassword: encryptText(password),
-        accountServer,
-      },
-      select: {
-        id: true,
-        status: true,
-        createdAt: true,
-      },
+    const result = await prisma.$transaction(async (transaction) => {
+      const setupRequest = await transaction.tradingAccountSetupRequest.create({
+        data: {
+          orderId: order.id,
+          accountId,
+          accountPassword: encryptText(password),
+          accountServer,
+          status: "QUEUED",
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+        },
+      });
+
+      const deploymentJob = await transaction.deploymentJob.create({
+        data: {
+          setupRequestId: setupRequest.id,
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      return { setupRequest, deploymentJob };
     });
 
-    return buildResponse(setupRequest);
+    // The database is the durable source of truth. If Redis is temporarily
+    // unavailable, the Python worker's outbox reconciliation will enqueue it.
+    try {
+      await enqueueDeploymentJob(result.deploymentJob.id);
+    } catch (queueError) {
+      console.error("ENQUEUE_DEPLOYMENT_JOB_ERROR:", queueError);
+    }
+
+    return buildResponse({
+      ...result.setupRequest,
+      deploymentJobId: result.deploymentJob.id,
+      deploymentStatus: result.deploymentJob.status,
+    });
   } catch (error) {
     const code =
       error && typeof error === "object" && "code" in error

@@ -116,7 +116,10 @@ type TradingAccountOptionsResponse = {
   servers: Array<{
     id: number;
     name?: string | null;
+    status: number;
+    maxAccounts: number;
     tradingAccountCount: number;
+    hasCapacity: boolean;
   }>;
 };
 
@@ -191,18 +194,24 @@ const getTradingAccountDefaultValues = (
   packages: TradingAccountOptionsResponse["packages"],
   expertAdvisors: TradingAccountOptionsResponse["expertAdvisors"],
   servers: TradingAccountOptionsResponse["servers"],
-): TradingAccountFormValues => ({
-  accountId: "",
-  password: "",
-  server: tradingServerOptions[0],
-  serverId: servers[0] ? String(servers[0].id) : "",
-  packageId: "",
-  expertAdvisorId: expertAdvisors[0] ? String(expertAdvisors[0].id) : "",
-  recurringPrice: "",
-  currency: "IDR",
-  status: "1",
-  endDate: "",
-});
+): TradingAccountFormValues => {
+  const availableServer = servers.find(
+    (server) => server.status === 1 && server.hasCapacity,
+  );
+
+  return {
+    accountId: "",
+    password: "",
+    server: tradingServerOptions[0],
+    serverId: availableServer ? String(availableServer.id) : "",
+    packageId: "",
+    expertAdvisorId: expertAdvisors[0] ? String(expertAdvisors[0].id) : "",
+    recurringPrice: "",
+    currency: "IDR",
+    status: "1",
+    endDate: "",
+  };
+};
 
 const formatDateInputValue = (date: Date) => {
   const year = date.getFullYear();
@@ -1618,10 +1627,17 @@ export default function AdminUserTradingAccountsPage({
                           <SelectItem
                             key={server.id}
                             value={String(server.id)}
+                            disabled={server.status !== 1 || !server.hasCapacity}
                             className={adminSelectItemClass}
                           >
                             {server.name || `Server #${server.id}`} (
-                            {server.tradingAccountCount} accounts)
+                            {server.tradingAccountCount}/{server.maxAccounts}
+                            {server.status !== 1
+                              ? ", inactive"
+                              : !server.hasCapacity
+                                ? ", full"
+                                : ""}
+                            )
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1973,10 +1989,21 @@ export default function AdminUserTradingAccountsPage({
                           <SelectItem
                             key={server.id}
                             value={String(server.id)}
+                            disabled={
+                              server.status !== 1 ||
+                              (!server.hasCapacity &&
+                                String(server.id) !== field.value)
+                            }
                             className={adminSelectItemClass}
                           >
                             {server.name || `Server #${server.id}`} (
-                            {server.tradingAccountCount} accounts)
+                            {server.tradingAccountCount}/{server.maxAccounts}
+                            {server.status !== 1
+                              ? ", inactive"
+                              : !server.hasCapacity
+                                ? ", full"
+                                : ""}
+                            )
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -261,6 +261,19 @@ export const POST = async (
       },
       select: {
         name: true,
+        status: true,
+        maxAccounts: true,
+        _count: {
+          select: {
+            tradingAccounts: {
+              where: {
+                status: {
+                  not: 4,
+                },
+              },
+            },
+          },
+        },
       },
     }),
     prisma.package.findUnique({
@@ -301,6 +314,18 @@ export const POST = async (
       "INVALID_RELATION",
       "Selected server, package, or Expert Advisor is invalid.",
       [],
+    );
+  }
+
+  if (
+    selectedServer.status !== 1 ||
+    selectedServer._count.tradingAccounts >= selectedServer.maxAccounts
+  ) {
+    return buildErrorResponse(
+      "SERVER_CAPACITY_REACHED",
+      "Selected VPS server is inactive or has reached its account capacity.",
+      [],
+      409,
     );
   }
 
@@ -580,6 +605,7 @@ export const PATCH = async (
       },
       select: {
         id: true,
+        serverId: true,
       },
     }),
     prisma.tradingAccount.findUnique({
@@ -596,6 +622,19 @@ export const PATCH = async (
       },
       select: {
         id: true,
+        status: true,
+        maxAccounts: true,
+        _count: {
+          select: {
+            tradingAccounts: {
+              where: {
+                status: {
+                  not: 4,
+                },
+              },
+            },
+          },
+        },
       },
     }),
     prisma.package.findUnique({
@@ -639,6 +678,19 @@ export const PATCH = async (
       "INVALID_RELATION",
       "Selected server, package, or Expert Advisor is invalid.",
       [],
+    );
+  }
+
+  if (
+    existingAccount.serverId !== serverId &&
+    (selectedServer.status !== 1 ||
+      selectedServer._count.tradingAccounts >= selectedServer.maxAccounts)
+  ) {
+    return buildErrorResponse(
+      "SERVER_CAPACITY_REACHED",
+      "Selected VPS server is inactive or has reached its account capacity.",
+      [],
+      409,
     );
   }
 
