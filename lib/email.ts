@@ -25,6 +25,21 @@ type DeploymentReadyEmail = {
   to: string;
 };
 
+type HealthcheckOfflineEmail = {
+  checkedAt: Date;
+  dashboardUrl: string;
+  offlineAccounts: Array<{
+    accountId: string;
+    serverName: string;
+  }>;
+  offlineServers: Array<{
+    address: string;
+    error?: string;
+    name: string;
+  }>;
+  to: string[];
+};
+
 const escapeHtml = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -210,6 +225,89 @@ export async function sendDeploymentReadyEmail({
   if (error) {
     throw new Error(
       `Resend failed to send deployment ready email: ${error.message}`,
+    );
+  }
+}
+
+export async function sendHealthcheckOfflineEmail({
+  checkedAt,
+  dashboardUrl,
+  offlineAccounts,
+  offlineServers,
+  to,
+}: HealthcheckOfflineEmail) {
+  const formattedCheckedAt = new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "long",
+    timeZone: "Asia/Jakarta",
+  }).format(checkedAt);
+  const incidentCount = offlineServers.length + offlineAccounts.length;
+  const safeDashboardUrl = escapeHtml(dashboardUrl);
+  const serverRows = offlineServers
+    .map(
+      (server) => `
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid #1e293b">Server</td>
+          <td style="padding:10px;border-bottom:1px solid #1e293b">${escapeHtml(server.name)}</td>
+          <td style="padding:10px;border-bottom:1px solid #1e293b">${escapeHtml(server.address)}</td>
+          <td style="padding:10px;border-bottom:1px solid #1e293b;color:#fca5a5">${escapeHtml(server.error || "Offline")}</td>
+        </tr>`,
+    )
+    .join("");
+  const accountRows = offlineAccounts
+    .map(
+      (account) => `
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid #1e293b">Trading account</td>
+          <td style="padding:10px;border-bottom:1px solid #1e293b">${escapeHtml(account.accountId)}</td>
+          <td style="padding:10px;border-bottom:1px solid #1e293b">${escapeHtml(account.serverName)}</td>
+          <td style="padding:10px;border-bottom:1px solid #1e293b;color:#fca5a5">Offline</td>
+        </tr>`,
+    )
+    .join("");
+  const textLines = [
+    `CuanHero detected ${incidentCount} new offline incident${incidentCount === 1 ? "" : "s"}.`,
+    `Checked at: ${formattedCheckedAt}`,
+    "",
+    ...offlineServers.map(
+      (server) =>
+        `Server: ${server.name} (${server.address}) - ${server.error || "Offline"}`,
+    ),
+    ...offlineAccounts.map(
+      (account) =>
+        `Trading account: ${account.accountId} on ${account.serverName} - Offline`,
+    ),
+    "",
+    `Open Admin Dashboard: ${dashboardUrl}`,
+  ];
+  const { from, resend } = getResendConfig();
+  const { error } = await resend.emails.send({
+    from,
+    to,
+    subject: `[CuanHero Alert] ${incidentCount} service${incidentCount === 1 ? "" : "s"} offline`,
+    text: textLines.join("\n"),
+    html: `
+      <div style="background:#020713;padding:32px 16px;font-family:Arial,sans-serif;color:#dbeafe">
+        <div style="max-width:760px;margin:0 auto;border:1px solid #7f1d1d;border-radius:16px;background:#071225;padding:32px">
+          <p style="margin:0 0 8px;color:#f87171;font-size:12px;letter-spacing:2px;text-transform:uppercase">CuanHero Healthcheck Alert</p>
+          <h1 style="margin:0 0 12px;color:#fff;font-size:24px">Service offline detected</h1>
+          <p style="margin:0 0 20px;color:#94a3b8;line-height:1.6">The scheduled healthcheck detected ${incidentCount} new offline incident${incidentCount === 1 ? "" : "s"} at ${formattedCheckedAt}.</p>
+          <div style="overflow-x:auto;margin-bottom:24px">
+            <table style="width:100%;border-collapse:collapse;background:#020b18;color:#cbd5e1;font-size:13px">
+              <thead><tr style="color:#94a3b8;text-align:left"><th style="padding:10px">Type</th><th style="padding:10px">Name / Account</th><th style="padding:10px">Address / Server</th><th style="padding:10px">Status</th></tr></thead>
+              <tbody>${serverRows}${accountRows}</tbody>
+            </table>
+          </div>
+          <a href="${safeDashboardUrl}" style="display:inline-block;border-radius:10px;background:#dc2626;padding:13px 20px;color:#fff;text-decoration:none;font-weight:700">Open Admin Dashboard</a>
+          <p style="margin:20px 0 0;color:#64748b;font-size:12px;line-height:1.5">This notification is sent only when a service changes to offline. It is not repeated during every healthcheck.</p>
+        </div>
+      </div>
+    `,
+  });
+
+  if (error) {
+    throw new Error(
+      `Resend failed to send healthcheck alert email: ${error.message}`,
     );
   }
 }

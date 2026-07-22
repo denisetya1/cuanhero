@@ -12,6 +12,7 @@ const SETTINGS_ID = 1;
 
 const settingsFields = [
   "whatsappNumber",
+  "notificationEmails",
   "tiktokLiveUrl",
   "metaTitleEn",
   "metaTitleId",
@@ -34,6 +35,7 @@ const defaultTextSettings = Object.fromEntries(
 const settingsSelect = {
   id: true,
   whatsappNumber: true,
+  notificationEmails: true,
   tiktokLiveEnabled: true,
   tiktokLiveUrl: true,
   metaTitleEn: true,
@@ -55,6 +57,7 @@ const settingsSelect = {
 const emptySettings = {
   id: SETTINGS_ID,
   whatsappNumber: "",
+  notificationEmails: "",
   tiktokLiveEnabled: false,
   tiktokLiveUrl: "",
   metaTitleEn: "",
@@ -157,6 +160,30 @@ export const PATCH = async (req: NextRequest) => {
     ? { tiktokLiveEnabled: body.tiktokLiveEnabled as boolean }
     : {};
 
+  if (data.notificationEmails !== undefined) {
+    const notificationEmails = [
+      ...new Set(
+        data.notificationEmails
+          .split(",")
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+    const invalidEmail = notificationEmails.some(
+      (email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+    );
+
+    if (invalidEmail || notificationEmails.length > 20) {
+      return buildErrorResponse(
+        "INVALID_NOTIFICATION_EMAILS",
+        "Enter up to 20 valid notification emails separated by commas.",
+        [],
+      );
+    }
+
+    data.notificationEmails = notificationEmails.join(", ");
+  }
+
   if (data.tiktokLiveUrl) {
     try {
       const url = new URL(data.tiktokLiveUrl);
@@ -172,13 +199,14 @@ export const PATCH = async (req: NextRequest) => {
 
   if (
     (data.whatsappNumber?.length ?? 0) > 50 ||
+    (data.notificationEmails?.length ?? 0) > 2000 ||
     (data.tiktokLiveUrl?.length ?? 0) > 191 ||
     (data.metaTitleEn?.length ?? 0) > 191 ||
     (data.metaTitleId?.length ?? 0) > 191
   ) {
     return buildErrorResponse(
       "INVALID_SETTINGS",
-      "WhatsApp number, TikTok URL, or meta title is too long.",
+      "WhatsApp number, notification emails, TikTok URL, or meta title is too long.",
       [],
     );
   }

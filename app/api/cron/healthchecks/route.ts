@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { sendHealthcheckOfflineEmail } from "@/lib/email";
 import {
   getPySyncBaseUrl,
   getPySyncServerAddress,
@@ -54,6 +55,7 @@ export const POST = async (req: NextRequest) => {
       select: {
         id: true,
         name: true,
+        status: true,
         ipAddress: true,
         domain: true,
         tradingAccounts: {
@@ -79,6 +81,7 @@ export const POST = async (req: NextRequest) => {
     const results = await Promise.all(
       servers.map(async (server) => {
         const startedAt = Date.now();
+        const serverName = server.name?.trim() || `Server #${server.id}`;
 
         try {
           const response = await fetch(
@@ -100,6 +103,10 @@ export const POST = async (req: NextRequest) => {
           const runtime = asRecord(await response.json());
           const bots = Array.isArray(runtime?.bots) ? runtime.bots : [];
           const botsByAccountId = new Map<string, Record<string, unknown>>();
+          const offlineAccounts: Array<{
+            accountId: string;
+            serverName: string;
+          }> = [];
 
           for (const value of bots) {
             const bot = asRecord(value);
@@ -155,6 +162,13 @@ export const POST = async (req: NextRequest) => {
               Number.isFinite(heartbeatAt) && heartbeatAt > 0;
             const statusChanged = nextEaStatus !== account.eaStatus;
 
+            if (account.eaStatus === 1 && nextEaStatus === 3) {
+              offlineAccounts.push({
+                accountId: account.accountId,
+                serverName,
+              });
+            }
+
             if (!statusChanged && !hasHeartbeat) return [];
 
             return [
@@ -181,11 +195,12 @@ export const POST = async (req: NextRequest) => {
 
           return {
             serverId: server.id,
-            serverName: server.name,
+            serverName,
             online: true,
             latencyMs: Date.now() - startedAt,
             bots: bots.length,
             unexpectedBots,
+            offlineAccounts,
           };
         } catch (error) {
           await prisma.server.update({
@@ -195,7 +210,9 @@ export const POST = async (req: NextRequest) => {
 
           return {
             serverId: server.id,
-            serverName: server.name,
+            serverName,
+            serverAddress: server.domain || server.ipAddress,
+            wasOnline: server.status !== 0,
             online: false,
             latencyMs: Date.now() - startedAt,
             error: getErrorMessage(error),
@@ -211,6 +228,23 @@ export const POST = async (req: NextRequest) => {
             serverName: result.serverName,
             ...bot,
           }))
+        : [],
+    );
+
+    const newlyOfflineServers = results.flatMap((result) =>
+      !result.online && result.wasOnline
+        ? [
+            {
+              name: result.serverName,
+              address: result.serverAddress,
+              error: result.error,
+            },
+          ]
+        : [],
+    );
+    const newlyOfflineAccounts = results.flatMap((result) =>
+      result.online && Array.isArray(result.offlineAccounts)
+        ? result.offlineAccounts
         : [],
     );
 
@@ -278,6 +312,44 @@ export const POST = async (req: NextRequest) => {
       });
     }
 
+    let notificationEmailSent = false;
+    let notificationRecipientCount = 0;
+    let notificationEmailError: string | null = null;
+    if (newlyOfflineServers.length || newlyOfflineAccounts.length) {
+      const settings = await prisma.appSetting.findUnique({
+        where: { id: 1 },
+        select: { notificationEmails: true },
+      });
+      const recipients = [
+        ...new Set(
+          (settings?.notificationEmails || "")
+            .split(",")
+            .map((email) => email.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      ];
+      notificationRecipientCount = recipients.length;
+
+      if (recipients.length) {
+        try {
+          const dashboardUrl = `${(
+            process.env.BETTER_AUTH_URL || "https://cuanhero.com"
+          ).replace(/\/$/, "")}/admin/trading-accounts`;
+          await sendHealthcheckOfflineEmail({
+            checkedAt: detectedAt,
+            dashboardUrl,
+            offlineAccounts: newlyOfflineAccounts,
+            offlineServers: newlyOfflineServers,
+            to: recipients,
+          });
+          notificationEmailSent = true;
+        } catch (emailError) {
+          notificationEmailError = getErrorMessage(emailError);
+          console.error("HEALTHCHECK_NOTIFICATION_EMAIL_ERROR:", emailError);
+        }
+      }
+    }
+
     return buildResponse({
       checkedAt: new Date().toISOString(),
       total: results.length,
@@ -285,6 +357,11 @@ export const POST = async (req: NextRequest) => {
       offline: results.filter((result) => !result.online).length,
       unexpectedBotsCount: unexpectedBots.length,
       unexpectedBots,
+      newlyOfflineServers,
+      newlyOfflineAccounts,
+      notificationEmailSent,
+      notificationRecipientCount,
+      notificationEmailError,
       reportStored: true,
       results,
     });

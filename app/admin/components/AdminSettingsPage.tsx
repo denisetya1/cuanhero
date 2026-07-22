@@ -17,6 +17,21 @@ import {
 
 const settingsSchema = z.object({
   whatsappNumber: z.string().trim().max(50, "Maximum 50 characters."),
+  notificationEmails: z
+    .string()
+    .trim()
+    .max(2000, "Maximum 2,000 characters.")
+    .refine((value) => {
+      if (!value) return true;
+      const emails = value
+        .split(",")
+        .map((email) => email.trim())
+        .filter(Boolean);
+      return (
+        emails.length <= 20 &&
+        emails.every((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      );
+    }, "Enter up to 20 valid email addresses separated by commas."),
   tiktokLiveEnabled: z.boolean(),
   tiktokLiveUrl: z
     .string()
@@ -49,6 +64,7 @@ type SettingsFormValues = z.infer<typeof settingsSchema>;
 
 const emptySettings: SettingsFormValues = {
   whatsappNumber: "",
+  notificationEmails: "",
   tiktokLiveEnabled: false,
   tiktokLiveUrl: "",
   metaTitleEn: "",
@@ -126,7 +142,7 @@ export default function AdminSettingsPage() {
           <p className="text-sm font-semibold text-blue-600">Application</p>
           <h1 className="text-2xl font-bold text-slate-950">Settings</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Manage contact details, SEO metadata, and WhatsApp message templates.
+            Manage contact details, notifications, SEO metadata, and WhatsApp message templates.
           </p>
         </div>
         <Button
@@ -148,7 +164,9 @@ export default function AdminSettingsPage() {
           <Settings className="h-5 w-5 text-blue-600" />
           <div>
             <h2 className="font-semibold text-slate-950">General</h2>
-            <p className="text-xs text-slate-500">Primary WhatsApp contact number.</p>
+            <p className="text-xs text-slate-500">
+              Primary contact and operational notification recipients.
+            </p>
           </div>
         </div>
         <div className="grid gap-5 lg:grid-cols-2">
@@ -198,6 +216,25 @@ export default function AdminSettingsPage() {
               <FieldError message={form.formState.errors.tiktokLiveUrl?.message} />
             </label>
           </div>
+
+          <label className="block lg:col-span-2">
+            <span className="mb-2 block text-sm font-medium text-slate-700">
+              Notification Email
+            </span>
+            <Input
+              type="text"
+              placeholder="admin@cuanhero.com, operations@cuanhero.com"
+              {...form.register("notificationEmails")}
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Separate multiple addresses with commas. Healthcheck alerts are
+              sent when a server or trading account changes to offline.
+            </p>
+            <FieldError
+              message={form.formState.errors.notificationEmails?.message}
+            />
+          </label>
         </div>
       </section>
 
