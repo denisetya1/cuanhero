@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import AdminMarkOrderPaidButton from "../../components/AdminMarkOrderPaidButton";
 
 export const dynamic = "force-dynamic";
 
@@ -323,14 +324,22 @@ export default async function AdminOrdersPage({
                           </span>
                         </td>
                         <td className="px-5 py-4">
-                          <Link
-                            href={`/admin/users/${order.user.id}/trading-accounts`}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-50"
-                          >
-                            <UserRound className="h-3.5 w-3.5" />
-                            User accounts
-                            <ExternalLink className="h-3 w-3" />
-                          </Link>
+                          <div className="flex flex-col items-start gap-2">
+                            <Link
+                              href={`/admin/users/${order.user.id}/trading-accounts`}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-50"
+                            >
+                              <UserRound className="h-3.5 w-3.5" />
+                              User accounts
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                            {order.status !== "PAID" ? (
+                              <AdminMarkOrderPaidButton
+                                orderId={order.id}
+                                orderNumber={order.orderNumber}
+                              />
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );

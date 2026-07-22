@@ -129,7 +129,6 @@ export const POST = async (req: NextRequest) => {
         name: requestedName || `VPS ${publicIp}`,
         ipAddress: publicIp,
         status: 1,
-        orderNumber: 9999,
         createdBy: "pysync-registration",
         updatedBy: "pysync-registration",
       },

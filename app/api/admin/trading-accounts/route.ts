@@ -27,7 +27,9 @@ export const GET = async () => {
         not: 4,
       },
     },
-    orderBy: [{ lastSync: "asc" }, { createdAt: "desc" }],
+    // Keep monitor rows stable while heartbeat updates lastSync in the
+    // background. New accounts are appended instead of reshuffling old rows.
+    orderBy: { id: "asc" },
     select: {
       id: true,
       accountId: true,

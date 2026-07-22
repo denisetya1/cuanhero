@@ -1,4 +1,5 @@
 import { verifyIpaymuCallbackSignature } from "@/lib/ipaymu";
+import { markOrderPaid } from "@/lib/order-payment";
 import prisma from "@/lib/prisma";
 import { buildErrorResponse, buildResponse } from "@/lib/response";
 import { NextRequest } from "next/server";
@@ -39,45 +40,6 @@ const getOrderStatus = (payload: Record<string, unknown>) => {
   if (status === "cancelled" || status === "canceled") return "CANCELLED";
   if (status === "pending" || statusCode === 0) return "PENDING";
   return "FAILED";
-};
-
-const startOfUtcDay = (value = new Date()) =>
-  new Date(
-    Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
-  );
-
-const calculateSubscriptionEndDate = ({
-  currentEndDate,
-  currentRecurringType,
-  currentPackageCode,
-  nextRecurringType,
-}: {
-  currentEndDate: Date | null;
-  currentRecurringType: string;
-  currentPackageCode: string | null;
-  nextRecurringType: string;
-}) => {
-  const normalizedNextType = nextRecurringType.trim().toLowerCase();
-  if (normalizedNextType === "lifetime") return null;
-
-  const durationMatch = normalizedNextType.match(/^(\d+)\s*d$/);
-  const durationDays = durationMatch
-    ? Math.max(1, Number(durationMatch[1]))
-    : normalizedNextType.includes("year")
-      ? 365
-      : 30;
-  const today = startOfUtcDay();
-  const upgradingFromTrial =
-    currentPackageCode?.trim().toUpperCase() === "FREE_TRIAL" ||
-    currentRecurringType.trim().toLowerCase() === "24h";
-  const current = currentEndDate ? startOfUtcDay(currentEndDate) : null;
-  const base =
-    !upgradingFromTrial && current && current.getTime() > today.getTime()
-      ? current
-      : today;
-
-  base.setUTCDate(base.getUTCDate() + durationDays);
-  return base;
 };
 
 export const POST = async (request: NextRequest) => {
@@ -159,82 +121,15 @@ export const POST = async (request: NextRequest) => {
       providerMessage: stringValue(payload.status) || nextStatus,
     };
 
-    if (nextStatus === "PAID" && order.tradingAccountId) {
-      await prisma.$transaction(async (transaction) => {
-        // Claim the payment once. Duplicate callbacks must never extend the
-        // same subscription more than once.
-        const claimed = await transaction.order.updateMany({
-          where: { id: order.id, status: { not: "PAID" } },
-          data: callbackData,
-        });
-        if (claimed.count === 0) return;
-
-        const paidOrder = await transaction.order.findUnique({
-          where: { id: order.id },
-          select: {
-            orderNumber: true,
-            amount: true,
-            packageId: true,
-            tradingAccountId: true,
-            paymentMethod: true,
-            package: {
-              select: { code: true, recurringType: true },
-            },
-          },
-        });
-        if (!paidOrder?.tradingAccountId) return;
-
-        const account = await transaction.tradingAccount.findUnique({
-          where: { id: paidOrder.tradingAccountId },
-          select: {
-            id: true,
-            packageId: true,
-            endDate: true,
-            package: { select: { code: true, recurringType: true } },
-          },
-        });
-        if (!account) {
-          throw new Error("Upgrade trading account no longer exists.");
-        }
-
-        const newEndDate = calculateSubscriptionEndDate({
-          currentEndDate: account.endDate,
-          currentRecurringType: account.package.recurringType,
-          currentPackageCode: account.package.code,
-          nextRecurringType: paidOrder.package.recurringType,
-        });
-        const paymentType =
-          account.packageId === paidOrder.packageId ? "RENEWAL" : "UPGRADE";
-
-        await transaction.tradingAccount.update({
-          where: { id: account.id },
-          data: {
-            packageId: paidOrder.packageId,
-            recurringPrice: paidOrder.amount,
-            endDate: newEndDate,
-            status: 1,
-            updatedBy: "ipaymu-callback",
-          },
-        });
-
-        await transaction.paymentRecord.create({
-          data: {
-            tradingAccountId: account.id,
-            packageId: paidOrder.packageId,
-            amount: paidOrder.amount,
-            currency: "IDR",
-            paymentMethod: paidOrder.paymentMethod || "QRIS",
-            type: paymentType,
-            status: "APPROVED",
-            previousEndDate: account.endDate,
-            newEndDate,
-            paidAt,
-            approvedAt: paidAt,
-            note: `${paymentType} via order ${paidOrder.orderNumber}`,
-            createdBy: "ipaymu-callback",
-            updatedBy: "ipaymu-callback",
-          },
-        });
+    if (nextStatus === "PAID") {
+      await markOrderPaid({
+        orderId: order.id,
+        paidAt,
+        actor: "ipaymu-callback",
+        paymentMethod: callbackData.paymentMethod,
+        paymentChannel: callbackData.paymentChannel,
+        providerTransactionId: callbackData.providerTransactionId,
+        providerMessage: callbackData.providerMessage,
       });
     } else {
       await prisma.order.update({

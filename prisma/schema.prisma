@@ -305,7 +305,6 @@ model Server {
   updatedBy           String?              @map("updated_by")
   status              Int                  @default(0) @db.TinyInt
   maxAccounts         Int                  @default(4) @map("max_accounts")
-  orderNumber         Int                  @default(9999) @map("order_number")
   tradingAccounts     TradingAccount[]
   runtimeHealthIssues RuntimeHealthIssue[]
   deploymentJobs      DeploymentJob[]

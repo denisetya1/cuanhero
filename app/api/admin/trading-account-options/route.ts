@@ -55,7 +55,7 @@ export const GET = async () => {
       },
     }),
     prisma.server.findMany({
-      orderBy: [{ orderNumber: "asc" }, { id: "asc" }],
+      orderBy: { id: "asc" },
       select: {
         id: true,
         name: true,

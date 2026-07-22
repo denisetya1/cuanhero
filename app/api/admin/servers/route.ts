@@ -15,7 +15,6 @@ const serverSelect = {
   domain: true,
   status: true,
   maxAccounts: true,
-  orderNumber: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -64,7 +63,7 @@ export const GET = async () => {
   }
 
   const servers = await prisma.server.findMany({
-    orderBy: [{ orderNumber: "asc" }, { createdAt: "desc" }],
+    orderBy: { createdAt: "desc" },
     select: serverSelect,
   });
 
@@ -92,7 +91,6 @@ export const POST = async (req: NextRequest) => {
   const ipAddress = String(body.ipAddress || "").trim();
   const status = Number(body.status ?? 1);
   const maxAccounts = Number(body.maxAccounts ?? 4);
-  const orderNumber = Number(body.orderNumber ?? 9999);
 
   if (!name || !ipAddress) {
     return buildErrorResponse(
@@ -114,14 +112,6 @@ export const POST = async (req: NextRequest) => {
     return buildErrorResponse(
       "VALIDATION_ERROR",
       "Max accounts must be at least 1.",
-      [],
-    );
-  }
-
-  if (!Number.isInteger(orderNumber) || orderNumber < 0) {
-    return buildErrorResponse(
-      "VALIDATION_ERROR",
-      "Order number must be a positive whole number.",
       [],
     );
   }
@@ -151,7 +141,6 @@ export const POST = async (req: NextRequest) => {
         ipAddress,
         status,
         maxAccounts,
-        orderNumber,
         createdBy: session.user.id,
       },
       select: serverSelect,

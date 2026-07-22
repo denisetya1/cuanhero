@@ -66,7 +66,7 @@ export const POST = async (req: NextRequest) => {
           },
         },
       },
-      orderBy: { orderNumber: "asc" },
+      orderBy: { id: "asc" },
     });
 
     const registeredAccounts = new Map(

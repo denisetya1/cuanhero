@@ -100,7 +100,7 @@ export const GET = async (req: NextRequest) => {
         where: { resolvedAt: { not: null } },
       }),
       prisma.server.findMany({
-        orderBy: [{ orderNumber: "asc" }, { name: "asc" }],
+        orderBy: [{ name: "asc" }, { id: "asc" }],
         select: { id: true, name: true, domain: true, ipAddress: true },
       }),
     ]);

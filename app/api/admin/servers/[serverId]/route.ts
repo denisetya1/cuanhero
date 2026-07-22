@@ -16,7 +16,6 @@ const serverSelect = {
   domain: true,
   status: true,
   maxAccounts: true,
-  orderNumber: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -83,7 +82,6 @@ export const PATCH = async (
   const ipAddress = String(body.ipAddress || "").trim();
   const status = Number(body.status ?? 1);
   const maxAccounts = Number(body.maxAccounts ?? 4);
-  const orderNumber = Number(body.orderNumber ?? 9999);
 
   if (!id || !name || !ipAddress) {
     return buildErrorResponse(
@@ -105,14 +103,6 @@ export const PATCH = async (
     return buildErrorResponse(
       "VALIDATION_ERROR",
       "Max accounts must be at least 1.",
-      [],
-    );
-  }
-
-  if (!Number.isInteger(orderNumber) || orderNumber < 0) {
-    return buildErrorResponse(
-      "VALIDATION_ERROR",
-      "Order number must be a positive whole number.",
       [],
     );
   }
@@ -167,7 +157,6 @@ export const PATCH = async (
         ipAddress,
         status,
         maxAccounts,
-        orderNumber,
         updatedBy: session.user.id,
       },
       select: serverSelect,

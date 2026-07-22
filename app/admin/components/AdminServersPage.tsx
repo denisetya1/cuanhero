@@ -53,7 +53,6 @@ type ServerItem = {
   domain?: string | null;
   status: number;
   maxAccounts: number;
-  orderNumber: number;
   createdAt: string | Date;
   updatedAt: string | Date;
   _count: {
@@ -87,16 +86,6 @@ const serverSchema = z.object({
         message: "Max accounts must be at least 1.",
       },
     ),
-  orderNumber: z
-    .string()
-    .trim()
-    .min(1, "Order number is required.")
-    .refine(
-      (value) => Number.isInteger(Number(value)) && Number(value) >= 0,
-      {
-        message: "Order number must be a positive whole number.",
-      },
-    ),
 });
 
 type ServerFormValues = z.infer<typeof serverSchema>;
@@ -106,7 +95,6 @@ const serverDefaultValues: ServerFormValues = {
   ipAddress: "",
   status: "1",
   maxAccounts: "4",
-  orderNumber: "9999",
 };
 
 const formatDate = (value: string | Date) => {
@@ -202,7 +190,6 @@ export default function AdminServersPage() {
       ipAddress: server.ipAddress,
       status: server.status === 1 ? "1" : "0",
       maxAccounts: String(server.maxAccounts),
-      orderNumber: String(server.orderNumber),
     });
     setOpenEditDialog(true);
   };
@@ -268,7 +255,6 @@ export default function AdminServersPage() {
       ipAddress: values.ipAddress.trim(),
       status: Number(values.status),
       maxAccounts: Number(values.maxAccounts),
-      orderNumber: Number(values.orderNumber),
     };
 
     try {
@@ -302,7 +288,6 @@ export default function AdminServersPage() {
         ipAddress: values.ipAddress.trim(),
         status: Number(values.status),
         maxAccounts: Number(values.maxAccounts),
-        orderNumber: Number(values.orderNumber),
       });
       handleEditDialogChange(false);
       toast.success("Server updated successfully.");
@@ -346,23 +331,6 @@ export default function AdminServersPage() {
     form: typeof createServerForm | typeof editServerForm,
   ) => (
     <div className="space-y-5">
-      <label className="block space-y-2.5">
-        <span className="text-sm font-medium text-gray-700">No</span>
-        <Input
-          type="number"
-          min="0"
-          step="1"
-          {...form.register("orderNumber")}
-          placeholder="9999"
-          className={adminInputClass}
-        />
-        {form.formState.errors.orderNumber && (
-          <span className="text-xs text-red-600">
-            {form.formState.errors.orderNumber.message}
-          </span>
-        )}
-      </label>
-
       <label className="block space-y-2.5">
         <span className="text-sm font-medium text-gray-700">Name</span>
         <Input
@@ -523,10 +491,12 @@ export default function AdminServersPage() {
                   </td>
                 </tr>
               ) : (
-                paginatedServers.map((server) => (
+                paginatedServers.map((server, index) => (
                   <tr key={server.id} className="hover:bg-slate-50/60">
                     <td className="px-5 py-4 font-semibold text-gray-600">
-                      {server.orderNumber}
+                      {(safeCurrentPage - 1) * DEFAULT_TABLE_PAGE_SIZE +
+                        index +
+                        1}
                     </td>
                     <td className="px-5 py-4">
                       <p className="font-semibold text-gray-900">
