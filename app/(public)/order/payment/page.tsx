@@ -1,7 +1,13 @@
 import { auth } from "@/lib/auth";
 import PaymentCountdown from "@/components/PaymentCountdown";
 import prisma from "@/lib/prisma";
-import { CheckCircle2, Clock3, MessageCircle, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock3,
+  Download,
+  MessageCircle,
+  XCircle,
+} from "lucide-react";
 import { headers } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
@@ -124,6 +130,9 @@ export default async function OrderPaymentPage({
       console.error("IPAYMU_QRIS_RENDER_ERROR:", error);
     }
   }
+  const qrisImageType =
+    qrCodeDataUrl.match(/^data:image\/(png|jpeg|webp);base64,/)?.[1] || "png";
+  const qrisFileExtension = qrisImageType === "jpeg" ? "jpg" : qrisImageType;
 
   const whatsappNumber =
     paymentSettings?.whatsappNumber.replace(/\D/g, "") || "";
@@ -206,15 +215,25 @@ export default async function OrderPaymentPage({
             {isQris ? (
               <div className="mt-4">
                 {qrCodeDataUrl ? (
-                  <div className="mx-auto w-fit rounded-2xl bg-white p-3">
-                    <Image
-                      src={qrCodeDataUrl}
-                      alt="QRIS pembayaran CuanHero"
-                      width={280}
-                      height={280}
-                      unoptimized
-                      className="h-auto w-[240px] sm:w-[280px]"
-                    />
+                  <div>
+                    <div className="mx-auto w-fit rounded-2xl bg-white p-3">
+                      <Image
+                        src={qrCodeDataUrl}
+                        alt="QRIS pembayaran CuanHero"
+                        width={280}
+                        height={280}
+                        unoptimized
+                        className="h-auto w-[240px] sm:w-[280px]"
+                      />
+                    </div>
+                    <a
+                      href={qrCodeDataUrl}
+                      download={`qris-${order.orderNumber}.${qrisFileExtension}`}
+                      className="mx-auto mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-300/35 px-4 text-xs font-bold text-cyan-200 transition hover:bg-cyan-400/10"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download QRIS
+                    </a>
                   </div>
                 ) : (
                   <p className="break-all rounded-lg bg-slate-950 p-3 font-mono text-xs text-white">
