@@ -61,7 +61,8 @@ export default async function PublicOrderCheckoutPage({
     redirect(`/member/login?ref=${encodeURIComponent(checkoutPath)}`);
   }
 
-  const [upgradeAccount, expertAdvisor, packageItem] = await Promise.all([
+  const [upgradeAccount, expertAdvisor, packageItem, paymentSettings] =
+    await Promise.all([
     isUpgrade && session
       ? prisma.tradingAccount.findFirst({
           where: {
@@ -94,6 +95,10 @@ export default async function PublicOrderCheckoutPage({
         discountPercent: true,
         recurringType: true,
       },
+    }),
+    prisma.appSetting.findUnique({
+      where: { id: 1 },
+      select: { paymentMode: true, staticQrisImage: true },
     }),
   ]);
 
@@ -192,6 +197,12 @@ export default async function PublicOrderCheckoutPage({
                 tradingAccountId={upgradeAccount?.id}
                 isFree={Number(total) === 0}
                 defaultPhone={currentUser?.phoneNumber || ""}
+                paymentMode={
+                  paymentSettings?.paymentMode === "STATIC"
+                    ? "STATIC"
+                    : "DYNAMIC"
+                }
+                staticQrisReady={Boolean(paymentSettings?.staticQrisImage)}
               />
             </>
           ) : (
@@ -280,7 +291,9 @@ export default async function PublicOrderCheckoutPage({
           ) : null}
           <div className="mt-5 flex items-start gap-2 text-xs leading-5 text-slate-500">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-            Pembayaran akan diproses melalui koneksi payment gateway yang aman.
+            {paymentSettings?.paymentMode === "STATIC"
+              ? "Pembayaran QRIS akan diverifikasi secara manual oleh tim CuanHero."
+              : "Pembayaran akan diproses melalui koneksi payment gateway yang aman."}
           </div>
         </aside>
       </div>

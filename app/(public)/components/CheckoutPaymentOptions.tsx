@@ -11,6 +11,8 @@ type CheckoutPaymentOptionsProps = {
   tradingAccountId?: number;
   isFree?: boolean;
   defaultPhone?: string;
+  paymentMode?: "DYNAMIC" | "STATIC";
+  staticQrisReady?: boolean;
 };
 
 export default function CheckoutPaymentOptions({
@@ -19,12 +21,15 @@ export default function CheckoutPaymentOptions({
   tradingAccountId,
   isFree = false,
   defaultPhone = "",
+  paymentMode = "DYNAMIC",
+  staticQrisReady = false,
 }: CheckoutPaymentOptionsProps) {
   const router = useRouter();
   const [phone, setPhone] = useState(defaultPhone);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const isStaticPayment = !isFree && paymentMode === "STATIC";
 
   const startPayment = async () => {
     setIsLoading(true);
@@ -49,7 +54,7 @@ export default function CheckoutPaymentOptions({
       };
 
       if (!response.ok || !result.data?.statusUrl) {
-        throw new Error(result.message || "Gagal membuat pembayaran iPaymu.");
+        throw new Error(result.message || "Gagal membuat pembayaran.");
       }
 
       router.push(result.data.statusUrl);
@@ -57,7 +62,7 @@ export default function CheckoutPaymentOptions({
       setError(
         paymentError instanceof Error
           ? paymentError.message
-          : "Gagal membuat pembayaran iPaymu.",
+          : "Gagal membuat pembayaran.",
       );
       setIsLoading(false);
     }
@@ -74,7 +79,11 @@ export default function CheckoutPaymentOptions({
             {isFree ? "Free Activation" : "Payment Method"}
           </p>
           <h2 className="font-bold text-white">
-            {isFree ? "Aktifkan Free Trial" : "Pembayaran aman via iPaymu"}
+            {isFree
+              ? "Aktifkan Free Trial"
+              : isStaticPayment
+                ? "Pembayaran QRIS Manual"
+                : "Pembayaran aman via iPaymu"}
           </h2>
         </div>
       </div>
@@ -101,7 +110,9 @@ export default function CheckoutPaymentOptions({
           <span>
             <span className="block text-sm font-bold text-white">QRIS</span>
             <span className="mt-1 block text-xs leading-5 text-slate-400">
-              Scan dengan aplikasi mobile banking atau e-wallet.
+              {isStaticPayment
+                ? "Scan QRIS CuanHero, lalu konfirmasikan pembayaran melalui WhatsApp."
+                : "Scan dengan aplikasi mobile banking atau e-wallet."}
             </span>
           </span>
         </div>
@@ -122,9 +133,17 @@ export default function CheckoutPaymentOptions({
           className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-slate-950 px-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300"
         />
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          QR code pembayaran akan ditampilkan langsung di CuanHero.
+          {isStaticPayment
+            ? "Nomor ini disimpan agar tim CuanHero dapat menghubungi Anda saat verifikasi."
+            : "QR code pembayaran akan ditampilkan langsung di CuanHero."}
         </p>
       </div> : null}
+
+      {isStaticPayment && !staticQrisReady ? (
+        <p className="mt-4 rounded-lg border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          QRIS statis belum disiapkan oleh admin. Pembayaran belum dapat dibuat.
+        </p>
+      ) : null}
 
       <div className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm text-slate-300 transition hover:border-cyan-300/30">
         <input
@@ -161,7 +180,12 @@ export default function CheckoutPaymentOptions({
       <button
         type="button"
         onClick={startPayment}
-        disabled={isLoading || !termsAccepted || (!isFree && !phone.trim())}
+        disabled={
+          isLoading ||
+          !termsAccepted ||
+          (!isFree && !phone.trim()) ||
+          (isStaticPayment && !staticQrisReady)
+        }
         className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 font-bold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

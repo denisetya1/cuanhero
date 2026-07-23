@@ -13,6 +13,7 @@ const SETTINGS_ID = 1;
 const settingsFields = [
   "whatsappNumber",
   "notificationEmails",
+  "staticQrisImage",
   "tiktokLiveUrl",
   "metaTitleEn",
   "metaTitleId",
@@ -36,6 +37,8 @@ const settingsSelect = {
   id: true,
   whatsappNumber: true,
   notificationEmails: true,
+  paymentMode: true,
+  staticQrisImage: true,
   tiktokLiveEnabled: true,
   tiktokLiveUrl: true,
   metaTitleEn: true,
@@ -58,6 +61,8 @@ const emptySettings = {
   id: SETTINGS_ID,
   whatsappNumber: "",
   notificationEmails: "",
+  paymentMode: "DYNAMIC",
+  staticQrisImage: "",
   tiktokLiveEnabled: false,
   tiktokLiveUrl: "",
   metaTitleEn: "",
@@ -137,10 +142,18 @@ export const PATCH = async (req: NextRequest) => {
     body,
     "tiktokLiveEnabled",
   );
+  const hasPaymentMode = Object.prototype.hasOwnProperty.call(
+    body,
+    "paymentMode",
+  );
   const hasInvalidField = suppliedFields.some(
     (field) => body[field] !== null && typeof body[field] !== "string",
   ) ||
-    (hasTikTokLiveEnabled && typeof body.tiktokLiveEnabled !== "boolean");
+    (hasTikTokLiveEnabled && typeof body.tiktokLiveEnabled !== "boolean") ||
+    (hasPaymentMode &&
+      !["DYNAMIC", "STATIC"].includes(
+        String(body.paymentMode || "").toUpperCase(),
+      ));
 
   if (hasInvalidField) {
     return buildErrorResponse(
@@ -159,6 +172,67 @@ export const PATCH = async (req: NextRequest) => {
   const booleanData = hasTikTokLiveEnabled
     ? { tiktokLiveEnabled: body.tiktokLiveEnabled as boolean }
     : {};
+  const paymentData = hasPaymentMode
+    ? {
+        paymentMode: String(body.paymentMode).toUpperCase() as
+          | "DYNAMIC"
+          | "STATIC",
+      }
+    : {};
+
+  if (data.staticQrisImage) {
+    const imageMatch = data.staticQrisImage.match(
+      /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/,
+    );
+    const estimatedBytes = imageMatch
+      ? Math.floor((imageMatch[2].length * 3) / 4)
+      : Number.POSITIVE_INFINITY;
+
+    if (!imageMatch || estimatedBytes > 2 * 1024 * 1024) {
+      return buildErrorResponse(
+        "INVALID_QRIS_IMAGE",
+        "QRIS image must be PNG, JPG, or WebP and no larger than 2 MB.",
+        [],
+      );
+    }
+  }
+
+  const existingPaymentSettings = await prisma.appSetting.findUnique({
+    where: { id: SETTINGS_ID },
+    select: { paymentMode: true, staticQrisImage: true },
+  });
+  const nextPaymentMode =
+    paymentData.paymentMode ||
+    existingPaymentSettings?.paymentMode ||
+    "DYNAMIC";
+  const nextStaticQrisImage =
+    data.staticQrisImage !== undefined
+      ? data.staticQrisImage
+      : existingPaymentSettings?.staticQrisImage || "";
+
+  if (nextPaymentMode === "STATIC" && !nextStaticQrisImage) {
+    return buildErrorResponse(
+      "STATIC_QRIS_REQUIRED",
+      "Upload a QRIS image before enabling static payment mode.",
+      [],
+    );
+  }
+
+  if (
+    data.staticQrisImage === "" &&
+    existingPaymentSettings?.staticQrisImage
+  ) {
+    const pendingStaticOrders = await prisma.order.count({
+      where: { status: "PENDING", paymentProvider: "STATIC_QRIS" },
+    });
+    if (pendingStaticOrders > 0) {
+      return buildErrorResponse(
+        "STATIC_QRIS_IN_USE",
+        "QRIS image cannot be removed while static payment orders are still pending.",
+        [],
+      );
+    }
+  }
 
   if (data.notificationEmails !== undefined) {
     const notificationEmails = [
@@ -219,12 +293,14 @@ export const PATCH = async (req: NextRequest) => {
         ...defaultTextSettings,
         ...data,
         ...booleanData,
+        ...paymentData,
         createdBy: session.user.id,
         updatedBy: session.user.id,
       },
       update: {
         ...data,
         ...booleanData,
+        ...paymentData,
         updatedBy: session.user.id,
       },
       select: settingsSelect,

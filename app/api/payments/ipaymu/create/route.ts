@@ -77,7 +77,8 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  const [user, expertAdvisor, packageItem, upgradeAccount] = await Promise.all([
+  const [user, expertAdvisor, packageItem, upgradeAccount, paymentSettings] =
+    await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { id: true, name: true, email: true, phoneNumber: true, status: true },
@@ -112,6 +113,10 @@ export const POST = async (request: NextRequest) => {
           },
         })
       : Promise.resolve(null),
+    prisma.appSetting.findUnique({
+      where: { id: 1 },
+      select: { paymentMode: true, staticQrisImage: true },
+    }),
   ]);
 
   if (!user || user.status !== 1) {
@@ -317,11 +322,21 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
+  const isStaticPayment = paymentSettings?.paymentMode === "STATIC";
+  if (isStaticPayment && !paymentSettings.staticQrisImage) {
+    return buildErrorResponse(
+      "STATIC_QRIS_NOT_CONFIGURED",
+      "QRIS statis belum disiapkan. Silakan hubungi admin.",
+      [],
+      503,
+    );
+  }
+
   const phone = String(input.phone || user.phoneNumber || "").replace(/\D/g, "");
   if (phone.length < 9 || phone.length > 16) {
     return buildErrorResponse(
       "INVALID_PHONE_NUMBER",
-      "Nomor WhatsApp/telepon wajib diisi untuk pembayaran iPaymu.",
+      "Nomor WhatsApp/telepon wajib diisi untuk pembayaran.",
       [],
     );
   }
@@ -346,9 +361,26 @@ export const POST = async (request: NextRequest) => {
       amount,
       type: orderType,
       termsAcceptedAt: new Date(),
+      paymentProvider: isStaticPayment ? "STATIC_QRIS" : "IPAYMU",
+      paymentMethod: isStaticPayment ? "QRIS_STATIC" : null,
+      paymentChannel: isStaticPayment ? "QRIS" : null,
+      paymentName: isStaticPayment ? "QRIS CuanHero" : null,
+      providerMessage: isStaticPayment
+        ? "Waiting for manual payment confirmation"
+        : null,
+      expiresAt: isStaticPayment
+        ? new Date(Date.now() + 60 * 60 * 1000)
+        : null,
     },
     select: { id: true },
   });
+
+  if (isStaticPayment) {
+    return buildResponse({
+      orderNumber,
+      statusUrl: `/order/payment?order=${encodeURIComponent(orderNumber)}`,
+    });
+  }
 
   try {
     const payment = await createIpaymuDirectPayment({

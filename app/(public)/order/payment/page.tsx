@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import PaymentCountdown from "@/components/PaymentCountdown";
 import prisma from "@/lib/prisma";
-import { CheckCircle2, Clock3, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, MessageCircle, XCircle } from "lucide-react";
 import { headers } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
@@ -68,22 +68,29 @@ export default async function OrderPaymentPage({
     redirect(`/member/login?ref=${encodeURIComponent(currentPath)}`);
   }
 
-  const order = await prisma.order.findFirst({
-    where: { orderNumber, userId: session.user.id },
-    select: {
-      orderNumber: true,
-      amount: true,
-      status: true,
-      paymentMethod: true,
-      paymentChannel: true,
-      paymentNumber: true,
-      paymentName: true,
-      expiresAt: true,
-      tradingAccount: { select: { accountId: true } },
-      expertAdvisor: { select: { name: true } },
-      package: { select: { name: true } },
-    },
-  });
+  const [order, paymentSettings] = await Promise.all([
+    prisma.order.findFirst({
+      where: { orderNumber, userId: session.user.id },
+      select: {
+        orderNumber: true,
+        amount: true,
+        status: true,
+        paymentProvider: true,
+        paymentMethod: true,
+        paymentChannel: true,
+        paymentNumber: true,
+        paymentName: true,
+        expiresAt: true,
+        tradingAccount: { select: { accountId: true } },
+        expertAdvisor: { select: { name: true } },
+        package: { select: { name: true } },
+      },
+    }),
+    prisma.appSetting.findUnique({
+      where: { id: 1 },
+      select: { whatsappNumber: true, staticQrisImage: true },
+    }),
+  ]);
 
   if (!order) redirect("/order");
 
@@ -99,9 +106,12 @@ export default async function OrderPaymentPage({
   const amount = currencyFormatter.format(baseAmount);
   const normalizedPaymentMethod = order.paymentMethod?.toLowerCase() || "";
   const isQris = normalizedPaymentMethod.includes("qris");
+  const isStaticQris = order.paymentProvider === "STATIC_QRIS";
   let qrCodeDataUrl = "";
 
-  if (order.status === "PENDING" && isQris && order.paymentNumber) {
+  if (order.status === "PENDING" && isStaticQris) {
+    qrCodeDataUrl = paymentSettings?.staticQrisImage || "";
+  } else if (order.status === "PENDING" && isQris && order.paymentNumber) {
     try {
       qrCodeDataUrl = order.paymentNumber.startsWith("data:image/")
         ? order.paymentNumber
@@ -114,6 +124,21 @@ export default async function OrderPaymentPage({
       console.error("IPAYMU_QRIS_RENDER_ERROR:", error);
     }
   }
+
+  const whatsappNumber =
+    paymentSettings?.whatsappNumber.replace(/\D/g, "") || "";
+  const confirmationMessage = [
+    "Halo Admin CuanHero, saya sudah melakukan pembayaran QRIS.",
+    "",
+    `Order: ${order.orderNumber}`,
+    `Produk: ${order.expertAdvisor.name} — ${order.package.name}`,
+    `Total: ${amount}`,
+    "",
+    "Mohon bantu verifikasi pembayaran saya.",
+  ].join("\n");
+  const confirmationHref = whatsappNumber
+    ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(confirmationMessage)}`
+    : "";
 
   const expiresAt = order.expiresAt
     ? new Intl.DateTimeFormat("id-ID", {
@@ -138,7 +163,9 @@ export default async function OrderPaymentPage({
           {config.title}
         </h1>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-400">
-          {config.description}
+          {order.status === "PENDING" && isStaticQris
+            ? "Scan QRIS berikut, selesaikan pembayaran, lalu konfirmasikan kepada admin melalui WhatsApp."
+            : config.description}
         </p>
 
         {order.status === "PENDING" && order.expiresAt ? (
@@ -168,7 +195,9 @@ export default async function OrderPaymentPage({
           </div>
         </div>
 
-        {order.status === "PENDING" && order.paymentNumber ? (
+        {order.status === "PENDING" &&
+        isQris &&
+        (order.paymentNumber || qrCodeDataUrl) ? (
           <div className="mt-5 rounded-xl border border-cyan-300/20 bg-cyan-400/[0.04] p-5">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
               Instruksi Pembayaran
@@ -189,7 +218,7 @@ export default async function OrderPaymentPage({
                   </div>
                 ) : (
                   <p className="break-all rounded-lg bg-slate-950 p-3 font-mono text-xs text-white">
-                    {order.paymentNumber}
+                    QRIS belum tersedia. Silakan hubungi admin CuanHero.
                   </p>
                 )}
                 <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-slate-300">
@@ -207,7 +236,7 @@ export default async function OrderPaymentPage({
                   {order.paymentNumber}
                 </p>
                 <div className="mt-4">
-                  <CopyPaymentNumber value={order.paymentNumber} />
+                  <CopyPaymentNumber value={order.paymentNumber || ""} />
                 </div>
                 <p className="mt-4 text-sm leading-6 text-slate-300">
                   Transfer tepat sebesar <strong>{amount}</strong> ke nomor virtual
@@ -220,6 +249,18 @@ export default async function OrderPaymentPage({
               <p className="mt-4 text-xs text-amber-300">
                 Selesaikan pembayaran sebelum {expiresAt} WIB.
               </p>
+            ) : null}
+
+            {isStaticQris && confirmationHref ? (
+              <a
+                href={confirmationHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 text-sm font-bold text-white transition hover:bg-emerald-400"
+              >
+                <MessageCircle className="h-5 w-5" />
+                Konfirmasi Pembayaran via WhatsApp
+              </a>
             ) : null}
           </div>
         ) : null}

@@ -1,11 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
-import { Loader2, MessageSquareText, Save, Search, Settings } from "lucide-react";
+import {
+  CreditCard,
+  ImageUp,
+  Loader2,
+  MessageSquareText,
+  Save,
+  Search,
+  Settings,
+  Trash2,
+} from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -32,6 +42,8 @@ const settingsSchema = z.object({
         emails.every((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       );
     }, "Enter up to 20 valid email addresses separated by commas."),
+  paymentMode: z.enum(["DYNAMIC", "STATIC"]),
+  staticQrisImage: z.string(),
   tiktokLiveEnabled: z.boolean(),
   tiktokLiveUrl: z
     .string()
@@ -65,6 +77,8 @@ type SettingsFormValues = z.infer<typeof settingsSchema>;
 const emptySettings: SettingsFormValues = {
   whatsappNumber: "",
   notificationEmails: "",
+  paymentMode: "DYNAMIC",
+  staticQrisImage: "",
   tiktokLiveEnabled: false,
   tiktokLiveUrl: "",
   metaTitleEn: "",
@@ -97,6 +111,14 @@ export default function AdminSettingsPage() {
     resolver: zodResolver(settingsSchema),
     defaultValues: emptySettings,
   });
+  const paymentMode = useWatch({
+    control: form.control,
+    name: "paymentMode",
+  });
+  const staticQrisImage = useWatch({
+    control: form.control,
+    name: "staticQrisImage",
+  });
 
   useEffect(() => {
     if (settings) form.reset(settings);
@@ -114,6 +136,30 @@ export default function AdminSettingsPage() {
           : "Failed to save settings.",
       );
     }
+  };
+
+  const handleQrisImage = (file?: File) => {
+    if (!file) return;
+
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      toast.error("QRIS image must be PNG, JPG, or WebP.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("QRIS image must not exceed 2 MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      form.setValue("staticQrisImage", reader.result, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    };
+    reader.onerror = () => toast.error("Failed to read QRIS image.");
+    reader.readAsDataURL(file);
   };
 
   if (isLoading) {
@@ -235,6 +281,147 @@ export default function AdminSettingsPage() {
               message={form.formState.errors.notificationEmails?.message}
             />
           </label>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex items-center gap-3">
+          <CreditCard className="h-5 w-5 text-blue-600" />
+          <div>
+            <h2 className="font-semibold text-slate-950">Payment</h2>
+            <p className="text-xs text-slate-500">
+              Switch between automatic iPaymu payments and manually confirmed
+              static QRIS payments.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-5">
+            <div className="rounded-lg border border-slate-200 p-4">
+              <Controller
+                control={form.control}
+                name="paymentMode"
+                render={({ field }) => (
+                  <label className="flex items-center justify-between gap-4">
+                    <span>
+                      <span className="block text-sm font-medium text-slate-700">
+                        Static QRIS Payment
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-500">
+                        {field.value === "STATIC"
+                          ? "Active. Orders wait for manual confirmation by Super Admin."
+                          : "Inactive. Paid orders use the iPaymu direct-payment API."}
+                      </span>
+                    </span>
+                    <Switch
+                      checked={field.value === "STATIC"}
+                      onCheckedChange={(checked) =>
+                        field.onChange(checked ? "STATIC" : "DYNAMIC")
+                      }
+                    />
+                  </label>
+                )}
+              />
+            </div>
+
+            <div
+              className={`rounded-lg border p-4 ${
+                paymentMode === "STATIC"
+                  ? "border-blue-200 bg-blue-50/50"
+                  : "border-slate-200"
+              }`}
+            >
+              <p className="text-sm font-medium text-slate-700">
+                Current payment mode
+              </p>
+              <p className="mt-1 text-lg font-bold text-slate-950">
+                {paymentMode === "STATIC"
+                  ? "Static QRIS · Manual verification"
+                  : "Dynamic QRIS · iPaymu"}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Free packages remain activated automatically in either mode.
+                Static paid orders expire after one hour and remain pending
+                until confirmed manually.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-medium text-slate-700">
+              Static QRIS Image
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              PNG, JPG, or WebP. Maximum file size 2 MB.
+            </p>
+
+            {staticQrisImage ? (
+              <div className="mt-4">
+                <div className="mx-auto w-fit overflow-hidden rounded-xl border border-slate-200 bg-white p-3">
+                  <Image
+                    src={staticQrisImage}
+                    alt="Static QRIS preview"
+                    width={280}
+                    height={280}
+                    unoptimized
+                    className="h-auto max-h-64 w-auto max-w-full object-contain"
+                  />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-50">
+                    <ImageUp className="h-4 w-4" />
+                    Replace
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="sr-only"
+                      onChange={(event) =>
+                        handleQrisImage(event.target.files?.[0])
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      form.setValue("staticQrisImage", "", {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    disabled={paymentMode === "STATIC"}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    title={
+                      paymentMode === "STATIC"
+                        ? "Switch to dynamic mode before removing the image."
+                        : "Remove QRIS image"
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className="mt-4 flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 text-center transition hover:border-blue-300 hover:bg-blue-50/50">
+                <ImageUp className="h-8 w-8 text-blue-500" />
+                <span className="mt-3 text-sm font-semibold text-slate-700">
+                  Upload QRIS image
+                </span>
+                <span className="mt-1 text-xs text-slate-500">
+                  Required before static mode can be saved
+                </span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  onChange={(event) =>
+                    handleQrisImage(event.target.files?.[0])
+                  }
+                />
+              </label>
+            )}
+          </div>
         </div>
       </section>
 
