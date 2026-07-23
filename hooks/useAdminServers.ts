@@ -4,6 +4,7 @@ import { handleRes } from "@/lib/response";
 export type AdminServerPayload = {
   name: string;
   ipAddress: string;
+  domain: string;
   status: number;
   maxAccounts: number;
 };

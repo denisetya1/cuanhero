@@ -38,6 +38,7 @@ type ExpertAdvisorItem = {
   id: number;
   name: string;
   eaFileName: string;
+  currentVersion?: string | null;
   defaultConfig?: Record<string, unknown> | null;
   description?: Record<string, string> | string | null;
   image?: string | null;
@@ -59,6 +60,7 @@ const adminTextareaClass =
 const expertAdvisorSchema = z.object({
   name: z.string().trim().min(1, "Expert Advisor name is required."),
   eaFileName: z.string().trim().optional(),
+  currentVersion: z.string().trim().max(32).optional(),
   defaultConfig: z
     .string()
     .trim()
@@ -92,6 +94,7 @@ type ExpertAdvisorFormValues = z.infer<typeof expertAdvisorSchema>;
 const expertAdvisorDefaultValues: ExpertAdvisorFormValues = {
   name: "",
   eaFileName: "",
+  currentVersion: "",
   defaultConfig: "",
   descriptionEn: "",
   descriptionId: "",
@@ -204,6 +207,7 @@ export default function AdminExpertAdvisorsPage() {
     editExpertAdvisorForm.reset({
       name: expertAdvisor.name,
       eaFileName: expertAdvisor.eaFileName || "",
+      currentVersion: expertAdvisor.currentVersion || "",
       defaultConfig: stringifyDefaultConfig(expertAdvisor.defaultConfig),
       descriptionEn: description.en,
       descriptionId: description.id,
@@ -246,6 +250,7 @@ export default function AdminExpertAdvisorsPage() {
     const payload: AdminExpertAdvisorPayload = {
       name: values.name.trim(),
       eaFileName: values.eaFileName?.trim() || "",
+      currentVersion: values.currentVersion?.trim() || "",
       defaultConfig: parseDefaultConfig(values.defaultConfig),
       description: buildDescription(values.descriptionEn, values.descriptionId),
       image: values.image?.trim() || "",
@@ -288,6 +293,7 @@ export default function AdminExpertAdvisorsPage() {
         expertAdvisorId: selectedExpertAdvisor.id,
         name: values.name.trim(),
         eaFileName: values.eaFileName?.trim() || "",
+        currentVersion: values.currentVersion?.trim() || "",
         defaultConfig: parseDefaultConfig(values.defaultConfig),
         description: buildDescription(
           values.descriptionEn,
@@ -354,6 +360,7 @@ export default function AdminExpertAdvisorsPage() {
         expertAdvisorId: expertAdvisor.id,
         name: expertAdvisor.name,
         eaFileName: expertAdvisor.eaFileName || "",
+        currentVersion: expertAdvisor.currentVersion || "",
         defaultConfig: expertAdvisor.defaultConfig || null,
         description: localizedTextToJson(
           normalizeLocalizedText(expertAdvisor.description),
@@ -429,6 +436,22 @@ export default function AdminExpertAdvisorsPage() {
         {form.formState.errors.eaFileName && (
           <span className="text-xs text-red-600">
             {form.formState.errors.eaFileName.message}
+          </span>
+        )}
+      </label>
+
+      <label className="block space-y-2.5">
+        <span className="text-sm font-medium text-gray-700">
+          Current Version
+        </span>
+        <Input
+          {...form.register("currentVersion")}
+          placeholder="4.3"
+          className={adminInputClass}
+        />
+        {form.formState.errors.currentVersion && (
+          <span className="text-xs text-red-600">
+            {form.formState.errors.currentVersion.message}
           </span>
         )}
       </label>
@@ -587,6 +610,11 @@ export default function AdminExpertAdvisorsPage() {
                       {expertAdvisor.eaFileName && (
                         <p className="mt-1 font-mono text-[11px] text-blue-600">
                           {expertAdvisor.eaFileName}
+                        </p>
+                      )}
+                      {expertAdvisor.currentVersion && (
+                        <p className="mt-1 text-[11px] font-semibold text-emerald-600">
+                          Current v{expertAdvisor.currentVersion}
                         </p>
                       )}
                       <p className="mt-1 max-w-md text-xs leading-5 text-gray-500">

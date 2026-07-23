@@ -4,6 +4,7 @@ import { handleRes } from "@/lib/response";
 export type AdminExpertAdvisorPayload = {
   name: string;
   eaFileName?: string;
+  currentVersion?: string;
   defaultConfig?: Record<string, unknown> | null;
   description?: Record<string, string> | null;
   image?: string;

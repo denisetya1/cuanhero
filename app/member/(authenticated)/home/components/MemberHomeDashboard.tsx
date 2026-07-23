@@ -8,6 +8,7 @@ import {
   CircleArrowUp,
   CreditCard,
   ImageIcon,
+  PowerOff,
   RefreshCw,
   RotateCcw,
   ShieldAlert,
@@ -80,6 +81,11 @@ type TradingAccount = {
   accountId: string;
   accountName?: string | null;
   accountBalance?: string | null;
+  accountEquity?: string | null;
+  accountFloating?: string | null;
+  currency?: string | null;
+  eaVersion?: string | null;
+  metricsUpdatedAt?: string | Date | null;
   accountServer?: string | null;
   eaConfiguration?: StoredEAConfiguration | null;
   status: number;
@@ -95,6 +101,7 @@ type TradingAccount = {
   } | null;
   expertAdvisor?: {
     name?: string | null;
+    currentVersion?: string | null;
     defaultConfig?: StoredEAConfiguration | null;
   } | null;
 };
@@ -571,6 +578,23 @@ const formatBillingAmount = (value?: string | null) => {
   }).format(amount);
 };
 
+const formatAccountMetric = (
+  value?: string | null,
+  currency?: string | null,
+) => {
+  if (value === null || value === undefined || value === "") return "-";
+
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "-";
+
+  const formatted = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+  return currency?.trim() ? `${formatted} ${currency.trim()}` : formatted;
+};
+
 export default function MemberHomeDashboard() {
   const detectedTimeZone = useSyncExternalStore(
     subscribeToTimeZone,
@@ -596,6 +620,8 @@ export default function MemberHomeDashboard() {
   const [isScreenshotLoading, setIsScreenshotLoading] = useState(false);
   const [screenshotError, setScreenshotError] = useState(false);
   const [screenshotRequestId, setScreenshotRequestId] = useState(0);
+  const [isDisableAllOpen, setIsDisableAllOpen] = useState(false);
+  const [isDisablingAll, setIsDisablingAll] = useState(false);
   const tradingAccounts: TradingAccount[] = useMemo(
     () =>
       ((data?.data || []) as TradingAccount[]).filter(
@@ -658,6 +684,14 @@ export default function MemberHomeDashboard() {
 
   const currentEAStatus = selectedAccount?.eaStatus ?? 0;
   const botStatus = getBotStatus(currentEAStatus);
+  const installedEAVersion = selectedAccount?.eaVersion?.trim() || "";
+  const targetEAVersion =
+    selectedAccount?.expertAdvisor?.currentVersion?.trim() || "";
+  const isEAVersionOutdated =
+    Boolean(installedEAVersion) &&
+    Boolean(targetEAVersion) &&
+    installedEAVersion !== targetEAVersion;
+  const floatingProfit = Number(selectedAccount?.accountFloating);
   const canViewScreenshot =
     Boolean(selectedAccount) && currentEAStatus !== 0 && currentEAStatus !== 4;
   const screenshotUrl = selectedAccount
@@ -790,6 +824,58 @@ export default function MemberHomeDashboard() {
     setSaveMessage("Bot configuration saved successfully.");
     toast.success("Bot configuration saved successfully.");
     setIsSaving(false);
+  };
+
+  const handleDisableAllBots = async () => {
+    setIsDisablingAll(true);
+
+    try {
+      const response = (await fetch(
+        "/api/member/trading-accounts/disable-all",
+        { method: "POST" },
+      ).then(handleRes)) as {
+        data?: {
+          total?: number;
+          disabledCount?: number;
+          failedCount?: number;
+          results?: Array<{
+            accountId: string;
+            status: "DISABLED" | "FAILED";
+            message?: string;
+          }>;
+        };
+      };
+      const disabledCount = response.data?.disabledCount || 0;
+      const failed = (response.data?.results || []).filter(
+        (result) => result.status === "FAILED",
+      );
+
+      await queryClient.invalidateQueries({
+        queryKey: ["trading-accounts"],
+      });
+      setIsDisableAllOpen(false);
+
+      if (failed.length) {
+        const failedAccounts = failed
+          .map((result) => result.accountId)
+          .join(", ");
+        toast.warning(
+          `${disabledCount} bot disabled. Failed: ${failedAccounts}. You can retry the action.`,
+        );
+      } else {
+        toast.success(
+          `Auto Trade disabled for ${disabledCount} trading account${disabledCount === 1 ? "" : "s"}.`,
+        );
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to disable Auto Trade for all accounts.",
+      );
+    } finally {
+      setIsDisablingAll(false);
+    }
   };
 
   const renderConfigField = (name: ConfigFieldName) => {
@@ -970,8 +1056,21 @@ export default function MemberHomeDashboard() {
                 Select a trading account
               </h1>
             </div>
-            <div className="shrink-0 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200 shadow-[0_0_18px_rgba(0,217,255,0.18)]">
-              {tradingAccounts.length} accounts
+            <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
+              <div className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200 shadow-[0_0_18px_rgba(0,217,255,0.18)]">
+                {tradingAccounts.length} accounts
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!tradingAccounts.length || isDisablingAll}
+                onClick={() => setIsDisableAllOpen(true)}
+                className="h-8 border-red-400/35 bg-red-500/10 px-3 text-xs font-semibold text-red-200 hover:bg-red-500/20 hover:text-white"
+              >
+                <PowerOff className="h-3.5 w-3.5" />
+                Disable All Bots
+              </Button>
             </div>
           </div>
 
@@ -1009,53 +1108,148 @@ export default function MemberHomeDashboard() {
           </Select>
 
           <div className="mt-4 grid gap-3 text-sm text-ch-muted sm:grid-cols-2">
-            <div className={fieldPanelClass}>
-              <p className="text-xs text-cyan-300/80">Package</p>
-              <div className="mt-1 flex items-center justify-between gap-3">
-                <p className="font-semibold text-white">
-                  {selectedAccount?.package?.name || "-"}
-                </p>
-                {isFreeTrial && upgradeHref && (
-                  <Button
-                    asChild
-                    size="sm"
-                    className="h-auto min-h-8 shrink-0 bg-emerald-500 px-3 py-1.5 text-xs font-semibold whitespace-normal text-white hover:bg-emerald-400"
-                  >
-                    <Link href={upgradeHref}>
-                      <CircleArrowUp className="h-3.5 w-3.5" />
-                      Upgrade to IB Monthly
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            </div>
-            <div className={fieldPanelClass}>
-              <p className="text-xs text-cyan-300/80">Subscription End Date</p>
-              <div className="mt-1 flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-white">
-                    {formatDateOnly(selectedAccount?.endDate)}
-                  </p>
-                  {showNextBillingAmount ? (
-                    <p className="mt-1 text-xs text-cyan-300/80">
-                      Next billing: {formatBillingAmount(selectedAccount?.package?.price)}
+            <div className={`${fieldPanelClass} sm:col-span-2`}>
+              <div className="grid gap-4 sm:grid-cols-2 sm:gap-0">
+                <div className="flex items-center justify-between gap-3 sm:pr-5">
+                  <div>
+                    <p className="text-xs text-cyan-300/80">Package</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {selectedAccount?.package?.name || "-"}
                     </p>
-                  ) : null}
+                  </div>
+                  {isFreeTrial && upgradeHref && (
+                    <Button
+                      asChild
+                      size="sm"
+                      className="h-auto min-h-8 shrink-0 bg-emerald-500 px-3 py-1.5 text-xs font-semibold whitespace-normal text-white hover:bg-emerald-400"
+                    >
+                      <Link href={upgradeHref}>
+                        <CircleArrowUp className="h-3.5 w-3.5" />
+                        Upgrade to IB Monthly
+                      </Link>
+                    </Button>
+                  )}
                 </div>
-                {!isFreeTrial && showRenewButton && renewalHref && (
-                  <Button
-                    asChild
-                    size="sm"
-                    className="h-8 shrink-0 bg-emerald-500 px-3 text-xs font-semibold text-white hover:bg-emerald-400"
-                  >
-                    <Link href={renewalHref}>
-                      <CreditCard className="h-3.5 w-3.5" />
-                      Renew Subscription
-                    </Link>
-                  </Button>
-                )}
+
+                <div className="flex items-center justify-between gap-3 border-t border-cyan-400/15 pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5">
+                  <div>
+                    <p className="text-xs text-cyan-300/80">
+                      Subscription End Date
+                    </p>
+                    <p className="mt-1 font-semibold text-white">
+                      {formatDateOnly(selectedAccount?.endDate)}
+                    </p>
+                    {showNextBillingAmount ? (
+                      <p className="mt-1 text-xs text-cyan-300/80">
+                        Next billing:{" "}
+                        {formatBillingAmount(selectedAccount?.package?.price)}
+                      </p>
+                    ) : null}
+                  </div>
+                  {!isFreeTrial && showRenewButton && renewalHref && (
+                    <Button
+                      asChild
+                      size="sm"
+                      className="h-8 shrink-0 bg-emerald-500 px-3 text-xs font-semibold text-white hover:bg-emerald-400"
+                    >
+                      <Link href={renewalHref}>
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Renew Subscription
+                      </Link>
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
+
+            <details className={`${fieldPanelClass} group sm:col-span-2`}>
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-4 select-none [&::-webkit-details-marker]:hidden">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-cyan-300/80">
+                    Account Overview
+                  </p>
+                  <p className="mt-1 text-xs text-ch-muted">
+                    Latest account metrics and installed EA version.
+                  </p>
+                </div>
+                <div className="ml-auto flex items-center gap-3">
+                  <p className="hidden text-right text-xs text-cyan-300/70 sm:block">
+                    Updated: {formatDate(selectedAccount?.metricsUpdatedAt)}
+                  </p>
+                  <ChevronDown className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300 transition-transform duration-200 group-open:rotate-180" />
+                </div>
+              </summary>
+
+              <div className="mt-4 border-t border-cyan-400/15 pt-4">
+                <div className="mb-3 sm:hidden">
+                  <p className="text-xs text-cyan-300/70">
+                    Updated: {formatDate(selectedAccount?.metricsUpdatedAt)}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="rounded-xl border border-cyan-400/15 bg-black/25 p-3">
+                    <p className="text-xs text-cyan-300/70">Balance</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {formatAccountMetric(
+                        selectedAccount?.accountBalance,
+                        selectedAccount?.currency,
+                      )}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-cyan-400/15 bg-black/25 p-3">
+                    <p className="text-xs text-cyan-300/70">Equity</p>
+                    <p className="mt-1 font-semibold text-white">
+                      {formatAccountMetric(
+                        selectedAccount?.accountEquity,
+                        selectedAccount?.currency,
+                      )}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-cyan-400/15 bg-black/25 p-3">
+                    <p className="text-xs text-cyan-300/70">Floating</p>
+                    <p
+                      className={`mt-1 font-semibold ${
+                        Number.isFinite(floatingProfit) && floatingProfit !== 0
+                          ? floatingProfit > 0
+                            ? "text-emerald-300"
+                            : "text-red-300"
+                          : "text-white"
+                      }`}
+                    >
+                      {formatAccountMetric(
+                        selectedAccount?.accountFloating,
+                        selectedAccount?.currency,
+                      )}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-cyan-400/15 bg-black/25 p-3">
+                    <p className="text-xs text-cyan-300/70">EA Version</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-white">
+                        {installedEAVersion
+                          ? `v${installedEAVersion}`
+                          : "N/A"}
+                      </p>
+                      {isEAVersionOutdated ? (
+                        <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-200">
+                          Update
+                        </span>
+                      ) : installedEAVersion && targetEAVersion ? (
+                        <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-200">
+                          Current
+                        </span>
+                      ) : null}
+                    </div>
+                    {isEAVersionOutdated ? (
+                      <p className="mt-1 text-[10px] text-amber-200/80">
+                        Latest v{targetEAVersion}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </details>
           </div>
 
           {isLoading && (
@@ -1214,6 +1408,51 @@ export default function MemberHomeDashboard() {
         </section>
         <div aria-hidden="true" className="h-0 lg:h-16" />
       </form>
+
+      <Dialog
+        open={isDisableAllOpen}
+        onOpenChange={(open) => {
+          if (!isDisablingAll) setIsDisableAllOpen(open);
+        }}
+      >
+        <DialogContent className="border-red-400/25 bg-[rgba(3,10,24,0.98)] text-white shadow-[0_0_45px_rgba(239,68,68,0.14)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <PowerOff className="h-5 w-5 text-red-300" />
+              Disable Auto Trade for all accounts?
+            </DialogTitle>
+            <DialogDescription className="leading-6 text-slate-400">
+              This changes <strong className="text-slate-200">EnableBot</strong>{" "}
+              to false on all {tradingAccounts.length} active trading accounts.
+              It does not terminate MT5 or force-close open positions. Existing
+              cycles remain managed by each EA.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isDisablingAll}
+              onClick={() => setIsDisableAllOpen(false)}
+              className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-800 hover:text-white"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={isDisablingAll}
+              onClick={handleDisableAllBots}
+              className="bg-red-600 text-white hover:bg-red-500"
+            >
+              <PowerOff
+                className={`h-4 w-4 ${isDisablingAll ? "animate-pulse" : ""}`}
+              />
+              {isDisablingAll ? "Disabling..." : "Disable All Bots"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isScreenshotOpen}

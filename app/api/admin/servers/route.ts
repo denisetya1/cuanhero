@@ -89,6 +89,7 @@ export const POST = async (req: NextRequest) => {
   const body = await req.json();
   const name = String(body.name || "").trim();
   const ipAddress = String(body.ipAddress || "").trim();
+  const domain = String(body.domain || "").trim().toLowerCase();
   const status = Number(body.status ?? 1);
   const maxAccounts = Number(body.maxAccounts ?? 4);
 
@@ -108,6 +109,19 @@ export const POST = async (req: NextRequest) => {
     );
   }
 
+  if (
+    domain &&
+    !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
+      domain,
+    )
+  ) {
+    return buildErrorResponse(
+      "VALIDATION_ERROR",
+      "Enter a valid domain without protocol or path.",
+      [],
+    );
+  }
+
   if (!Number.isInteger(maxAccounts) || maxAccounts < 1) {
     return buildErrorResponse(
       "VALIDATION_ERROR",
@@ -118,7 +132,7 @@ export const POST = async (req: NextRequest) => {
 
   const existingServer = await prisma.server.findFirst({
     where: {
-      OR: [{ name }, { ipAddress }],
+      OR: [{ name }, { ipAddress }, ...(domain ? [{ domain }] : [])],
     },
     select: {
       id: true,
@@ -128,7 +142,7 @@ export const POST = async (req: NextRequest) => {
   if (existingServer) {
     return buildErrorResponse(
       "SERVER_EXISTS",
-      "Server name or IP address is already in use.",
+      "Server name, IP address, or domain is already in use.",
       [],
       409,
     );
@@ -139,6 +153,7 @@ export const POST = async (req: NextRequest) => {
       data: {
         name,
         ipAddress,
+        domain: domain || null,
         status,
         maxAccounts,
         createdBy: session.user.id,

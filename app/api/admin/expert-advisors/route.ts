@@ -14,6 +14,7 @@ const expertAdvisorSelect = {
   id: true,
   name: true,
   eaFileName: true,
+  currentVersion: true,
   defaultConfig: true,
   description: true,
   image: true,
@@ -87,6 +88,7 @@ export const POST = async (req: NextRequest) => {
   const body = await req.json();
   const name = String(body.name || "").trim();
   const eaFileName = String(body.eaFileName || "").trim();
+  const currentVersion = String(body.currentVersion || "").trim();
   const defaultConfig = body.defaultConfig ?? null;
   const description = localizedTextToJson(body.description);
   const image = String(body.image || "").trim();
@@ -144,6 +146,7 @@ export const POST = async (req: NextRequest) => {
       data: {
         name,
         eaFileName,
+        currentVersion: currentVersion || null,
         defaultConfig: defaultConfig ?? Prisma.DbNull,
         description: description ?? Prisma.DbNull,
         image: image || null,

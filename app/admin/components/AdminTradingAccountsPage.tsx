@@ -48,12 +48,18 @@ type TradingAccount = {
   accountServer?: string | null;
   status: number;
   eaStatus: number;
+  eaVersion?: string | null;
+  accountBalance?: string | null;
+  accountEquity?: string | null;
+  accountFloating?: string | null;
+  currency?: string | null;
+  metricsUpdatedAt?: string | null;
   lastSync?: string | null;
   endDate?: string | null;
   user: { id: string; name: string; email: string };
   server?: { id: number; name: string | null } | null;
   package?: { name: string } | null;
-  expertAdvisor?: { name: string } | null;
+  expertAdvisor?: { name: string; currentVersion?: string | null } | null;
 };
 
 type Health = "online" | "warning" | "offline" | "inactive";
@@ -97,6 +103,20 @@ const formatEndDate = (value?: string | null) => {
     year: "numeric",
     timeZone: "Asia/Jakarta",
   }).format(date);
+};
+
+const formatMoneyMetric = (
+  value?: string | null,
+  currency?: string | null,
+) => {
+  if (value === undefined || value === null || value === "") return "-";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "-";
+
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number)}${currency ? ` ${currency}` : ""}`;
 };
 
 const getJakartaDateKey = (value: Date) => {
@@ -393,17 +413,18 @@ export default function AdminTradingAccountsPage({
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Account</th><th className="px-5 py-3">Owner</th><th className="px-5 py-3">Server / EA</th><th className="px-5 py-3">Heartbeat</th><th className="px-5 py-3">End Date</th><th className="px-5 py-3">Service</th><th className="px-5 py-3">Action</th></tr></thead>
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Account</th><th className="px-5 py-3">Owner</th><th className="px-5 py-3">Server / EA</th><th className="px-5 py-3">Metrics</th><th className="px-5 py-3">Heartbeat</th><th className="px-5 py-3">End Date</th><th className="px-5 py-3">Service</th><th className="px-5 py-3">Action</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {isLoading ? <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-400">Loading trading accounts...</td></tr>
-                : isError ? <tr><td colSpan={7} className="px-5 py-12 text-center text-red-600">{error instanceof Error ? error.message : "Failed to load trading accounts."}</td></tr>
-                : visible.length === 0 ? <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-400">No matching trading accounts.</td></tr>
+              {isLoading ? <tr><td colSpan={8} className="px-5 py-12 text-center text-slate-400">Loading trading accounts...</td></tr>
+                : isError ? <tr><td colSpan={8} className="px-5 py-12 text-center text-red-600">{error instanceof Error ? error.message : "Failed to load trading accounts."}</td></tr>
+                : visible.length === 0 ? <tr><td colSpan={8} className="px-5 py-12 text-center text-slate-400">No matching trading accounts.</td></tr>
                 : visible.map((account) => {
                   const health = getHealth(account, now); const meta = healthMeta[health]; const Icon = meta.icon; const endDateMeta = getEndDateMeta(account, now);
                   return <tr key={account.id} className={endDateMeta.expiredWhileRunning || health === "offline" ? "bg-red-50/40" : "hover:bg-slate-50/60"}>
                     <td className="px-5 py-4"><p className="font-semibold text-slate-900">{account.accountName || account.accountId}</p><p className="text-xs text-slate-500">{account.accountId} · {account.accountServer || "-"}</p></td>
                     <td className="px-5 py-4"><p className="font-medium text-slate-800">{account.user.name}</p><p className="text-xs text-slate-500">{account.user.email}</p></td>
-                    <td className="px-5 py-4"><p className="text-slate-700">{account.server?.name || "-"}</p><p className="text-xs text-slate-500">{account.expertAdvisor?.name || "No EA"} · {account.package?.name || "No package"}</p></td>
+                    <td className="px-5 py-4"><p className="text-slate-700">{account.server?.name || "-"}</p><p className="text-xs text-slate-500">{account.expertAdvisor?.name || "No EA"} · {account.package?.name || "No package"}</p><span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${!account.eaVersion ? "border-slate-200 bg-slate-100 text-slate-500" : account.expertAdvisor?.currentVersion && account.eaVersion !== account.expertAdvisor.currentVersion ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{!account.eaVersion ? "Version unknown" : account.expertAdvisor?.currentVersion && account.eaVersion !== account.expertAdvisor.currentVersion ? `Outdated v${account.eaVersion} · target v${account.expertAdvisor.currentVersion}` : `Current v${account.eaVersion}`}</span></td>
+                    <td className="whitespace-nowrap px-5 py-4"><p className={`font-medium ${Number(account.accountBalance) === 0 && account.accountBalance !== null ? "text-red-700" : "text-slate-800"}`}>Balance: {formatMoneyMetric(account.accountBalance, account.currency)}</p><p className="text-xs text-slate-500">Equity: {formatMoneyMetric(account.accountEquity, account.currency)}</p><p className={`text-xs ${Number(account.accountFloating) < 0 ? "text-red-600" : "text-emerald-600"}`}>Floating: {formatMoneyMetric(account.accountFloating, account.currency)}</p></td>
                     <td className="whitespace-nowrap px-5 py-4"><p className="text-slate-700">{formatLastSync(account.lastSync)}</p><p className="text-xs text-slate-400">EA status: {account.eaStatus}</p></td>
                     <td className="whitespace-nowrap px-5 py-4">
                       <p className={endDateMeta.expiredWhileRunning ? "font-semibold text-red-700" : "text-slate-700"}>{formatEndDate(account.endDate)}</p>

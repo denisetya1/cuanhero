@@ -112,6 +112,7 @@ model ExpertAdvisor {
   updatedBy       String?          @map("updated_by")
   codeName        String           @default("") @map("code_name")
   eaFileName      String           @default("") @map("ea_file_name")
+  currentVersion  String?          @map("current_version")
   defaultConfig   Json?            @map("default_config") @db.Json
   isActive        Boolean          @default(true) @map("is_active")
   orderNumber     Int              @default(9999) @map("order_number")
@@ -128,6 +129,10 @@ model TradingAccount {
   accountServer        String?                           @map("account_server")
   accountName          String?                           @map("account_name")
   accountBalance       String?                           @map("account_balance")
+  accountEquity        String?                           @map("account_equity")
+  accountFloating      String?                           @map("account_floating")
+  eaVersion            String?                           @map("ea_version")
+  metricsUpdatedAt     DateTime?                         @map("metrics_updated_at")
   eaConfiguration      Json?                             @db.Json
   status               Int                               @default(0) @db.TinyInt
   updatedAt            DateTime                          @default(now()) @updatedAt @map("updated_at")

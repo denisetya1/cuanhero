@@ -75,6 +75,18 @@ const adminSelectItemClass =
 const serverSchema = z.object({
   name: z.string().trim().min(1, "Server name is required."),
   ipAddress: z.string().trim().min(1, "IP address is required."),
+  domain: z
+    .string()
+    .trim()
+    .max(253, "Domain must not exceed 253 characters.")
+    .refine(
+      (value) =>
+        !value ||
+        /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(
+          value,
+        ),
+      "Enter a valid domain without protocol or path.",
+    ),
   status: z.enum(["0", "1"]),
   maxAccounts: z
     .string()
@@ -93,6 +105,7 @@ type ServerFormValues = z.infer<typeof serverSchema>;
 const serverDefaultValues: ServerFormValues = {
   name: "",
   ipAddress: "",
+  domain: "",
   status: "1",
   maxAccounts: "4",
 };
@@ -188,6 +201,7 @@ export default function AdminServersPage() {
     editServerForm.reset({
       name: server.name || "",
       ipAddress: server.ipAddress,
+      domain: server.domain || "",
       status: server.status === 1 ? "1" : "0",
       maxAccounts: String(server.maxAccounts),
     });
@@ -253,6 +267,7 @@ export default function AdminServersPage() {
     const payload: AdminServerPayload = {
       name: values.name.trim(),
       ipAddress: values.ipAddress.trim(),
+      domain: values.domain.trim().toLowerCase(),
       status: Number(values.status),
       maxAccounts: Number(values.maxAccounts),
     };
@@ -286,6 +301,7 @@ export default function AdminServersPage() {
         serverId: selectedServer.id,
         name: values.name.trim(),
         ipAddress: values.ipAddress.trim(),
+        domain: values.domain.trim().toLowerCase(),
         status: Number(values.status),
         maxAccounts: Number(values.maxAccounts),
       });
@@ -355,6 +371,25 @@ export default function AdminServersPage() {
         {form.formState.errors.ipAddress && (
           <span className="text-xs text-red-600">
             {form.formState.errors.ipAddress.message}
+          </span>
+        )}
+      </label>
+
+      <label className="block space-y-2.5">
+        <span className="text-sm font-medium text-gray-700">
+          Domain <span className="font-normal text-gray-400">(optional)</span>
+        </span>
+        <Input
+          {...form.register("domain")}
+          placeholder="mt5-server-1.cuanhero.com"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          className={adminInputClass}
+        />
+        {form.formState.errors.domain && (
+          <span className="text-xs text-red-600">
+            {form.formState.errors.domain.message}
           </span>
         )}
       </label>

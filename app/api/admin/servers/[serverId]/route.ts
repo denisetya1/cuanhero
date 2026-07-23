@@ -80,6 +80,7 @@ export const PATCH = async (
   const body = await req.json();
   const name = String(body.name || "").trim();
   const ipAddress = String(body.ipAddress || "").trim();
+  const domain = String(body.domain || "").trim().toLowerCase();
   const status = Number(body.status ?? 1);
   const maxAccounts = Number(body.maxAccounts ?? 4);
 
@@ -95,6 +96,19 @@ export const PATCH = async (
     return buildErrorResponse(
       "VALIDATION_ERROR",
       "Invalid server status.",
+      [],
+    );
+  }
+
+  if (
+    domain &&
+    !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
+      domain,
+    )
+  ) {
+    return buildErrorResponse(
+      "VALIDATION_ERROR",
+      "Enter a valid domain without protocol or path.",
       [],
     );
   }
@@ -118,7 +132,7 @@ export const PATCH = async (
     }),
     prisma.server.findFirst({
       where: {
-        OR: [{ name }, { ipAddress }],
+        OR: [{ name }, { ipAddress }, ...(domain ? [{ domain }] : [])],
         NOT: {
           id,
         },
@@ -141,7 +155,7 @@ export const PATCH = async (
   if (duplicateServer) {
     return buildErrorResponse(
       "SERVER_EXISTS",
-      "Server name or IP address is already in use.",
+      "Server name, IP address, or domain is already in use.",
       [],
       409,
     );
@@ -155,6 +169,7 @@ export const PATCH = async (
       data: {
         name,
         ipAddress,
+        domain: domain || null,
         status,
         maxAccounts,
         updatedBy: session.user.id,

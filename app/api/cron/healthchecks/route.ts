@@ -40,6 +40,12 @@ const getErrorMessage = (error: unknown) =>
       ? error.message
       : "pySync server tidak dapat dihubungi.";
 
+const getMetricString = (value: unknown) => {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const normalized = String(value).trim();
+  return normalized && Number.isFinite(Number(normalized)) ? normalized : null;
+};
+
 export const POST = async (req: NextRequest) => {
   if (!isAuthorized(req.headers.get("authorization"))) {
     return buildErrorResponse(
@@ -160,6 +166,17 @@ export const POST = async (req: NextRequest) => {
             const heartbeatAt = Number(bot?.lastHeartbeatAt || 0);
             const hasHeartbeat =
               Number.isFinite(heartbeatAt) && heartbeatAt > 0;
+            const metricsUpdatedAt = Number(bot?.metricsUpdatedAt || 0);
+            const hasMetrics =
+              Number.isFinite(metricsUpdatedAt) && metricsUpdatedAt > 0;
+            const eaVersion =
+              typeof bot?.eaVersion === "string"
+                ? bot.eaVersion.trim()
+                : "";
+            const currency =
+              typeof bot?.currency === "string"
+                ? bot.currency.trim()
+                : "";
             const statusChanged = nextEaStatus !== account.eaStatus;
 
             if (account.eaStatus === 1 && nextEaStatus === 3) {
@@ -169,7 +186,7 @@ export const POST = async (req: NextRequest) => {
               });
             }
 
-            if (!statusChanged && !hasHeartbeat) return [];
+            if (!statusChanged && !hasHeartbeat && !hasMetrics) return [];
 
             return [
               prisma.tradingAccount.update({
@@ -178,6 +195,14 @@ export const POST = async (req: NextRequest) => {
                   eaStatus: nextEaStatus,
                   ...(hasHeartbeat && {
                     lastSync: new Date(heartbeatAt * 1000),
+                  }),
+                  ...(hasMetrics && {
+                    accountBalance: getMetricString(bot?.balance),
+                    accountEquity: getMetricString(bot?.equity),
+                    accountFloating: getMetricString(bot?.floating_profit),
+                    eaVersion: eaVersion || null,
+                    currency: currency || null,
+                    metricsUpdatedAt: new Date(metricsUpdatedAt * 1000),
                   }),
                   updatedBy: CRON_UPDATED_BY,
                 },
