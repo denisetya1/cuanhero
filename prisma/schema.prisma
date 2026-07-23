@@ -340,6 +340,7 @@ model RuntimeHealthIssue {
 model AppSetting {
   id                    Int      @id @default(1)
   whatsappNumber        String   @default("") @map("whatsapp_number")
+  exnessIbUrl           String   @default("") @map("exness_ib_url") @db.VarChar(1000)
   notificationEmails    String   @default("") @map("notification_emails") @db.VarChar(2000)
   paymentMode           String   @default("DYNAMIC") @map("payment_mode")
   staticQrisImage       String?  @map("static_qris_image") @db.LongText

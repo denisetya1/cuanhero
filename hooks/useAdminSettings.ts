@@ -3,6 +3,7 @@ import { handleRes } from "@/lib/response";
 
 export type AdminSettingsPayload = {
   whatsappNumber: string;
+  exnessIbUrl: string;
   notificationEmails: string;
   paymentMode: "DYNAMIC" | "STATIC";
   staticQrisImage: string;

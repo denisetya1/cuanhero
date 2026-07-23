@@ -27,6 +27,19 @@ import {
 
 const settingsSchema = z.object({
   whatsappNumber: z.string().trim().max(50, "Maximum 50 characters."),
+  exnessIbUrl: z
+    .string()
+    .trim()
+    .max(1000, "Maximum 1,000 characters.")
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        const url = new URL(value);
+        return ["http:", "https:"].includes(url.protocol);
+      } catch {
+        return false;
+      }
+    }, "Enter a valid HTTP or HTTPS URL."),
   notificationEmails: z
     .string()
     .trim()
@@ -76,6 +89,7 @@ type SettingsFormValues = z.infer<typeof settingsSchema>;
 
 const emptySettings: SettingsFormValues = {
   whatsappNumber: "",
+  exnessIbUrl: "",
   notificationEmails: "",
   paymentMode: "DYNAMIC",
   staticQrisImage: "",
@@ -226,6 +240,22 @@ export default function AdminSettingsPage() {
               className={inputClass}
             />
             <FieldError message={form.formState.errors.whatsappNumber?.message} />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-slate-700">
+              Exness IB URL
+            </span>
+            <Input
+              type="url"
+              placeholder="https://one.exnessonelink.com/..."
+              {...form.register("exnessIbUrl")}
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Exness partner registration link used by CuanHero.
+            </p>
+            <FieldError message={form.formState.errors.exnessIbUrl?.message} />
           </label>
 
           <div className="rounded-lg border border-slate-200 p-4">

@@ -12,6 +12,7 @@ const SETTINGS_ID = 1;
 
 const settingsFields = [
   "whatsappNumber",
+  "exnessIbUrl",
   "notificationEmails",
   "staticQrisImage",
   "tiktokLiveUrl",
@@ -36,6 +37,7 @@ const defaultTextSettings = Object.fromEntries(
 const settingsSelect = {
   id: true,
   whatsappNumber: true,
+  exnessIbUrl: true,
   notificationEmails: true,
   paymentMode: true,
   staticQrisImage: true,
@@ -60,6 +62,7 @@ const settingsSelect = {
 const emptySettings = {
   id: SETTINGS_ID,
   whatsappNumber: "",
+  exnessIbUrl: "",
   notificationEmails: "",
   paymentMode: "DYNAMIC",
   staticQrisImage: "",
@@ -271,8 +274,22 @@ export const PATCH = async (req: NextRequest) => {
     }
   }
 
+  if (data.exnessIbUrl) {
+    try {
+      const url = new URL(data.exnessIbUrl);
+      if (!["http:", "https:"].includes(url.protocol)) throw new Error();
+    } catch {
+      return buildErrorResponse(
+        "INVALID_SETTINGS",
+        "Exness IB URL must be a valid HTTP or HTTPS URL.",
+        [],
+      );
+    }
+  }
+
   if (
     (data.whatsappNumber?.length ?? 0) > 50 ||
+    (data.exnessIbUrl?.length ?? 0) > 1000 ||
     (data.notificationEmails?.length ?? 0) > 2000 ||
     (data.tiktokLiveUrl?.length ?? 0) > 191 ||
     (data.metaTitleEn?.length ?? 0) > 191 ||
@@ -280,7 +297,7 @@ export const PATCH = async (req: NextRequest) => {
   ) {
     return buildErrorResponse(
       "INVALID_SETTINGS",
-      "WhatsApp number, notification emails, TikTok URL, or meta title is too long.",
+      "WhatsApp number, Exness IB URL, notification emails, TikTok URL, or meta title is too long.",
       [],
     );
   }
