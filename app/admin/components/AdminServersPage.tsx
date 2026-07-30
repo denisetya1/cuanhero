@@ -8,12 +8,15 @@ import { z } from "zod";
 import { toast } from "react-toastify";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  Check,
+  Copy,
   Loader2,
   ListFilter,
   Pencil,
   Plus,
   Search,
   Server,
+  SquareTerminal,
   Stethoscope,
   Trash2,
 } from "lucide-react";
@@ -145,7 +148,10 @@ export default function AdminServersPage() {
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [openTunnelDialog, setOpenTunnelDialog] = useState(false);
   const [selectedServer, setSelectedServer] = useState<ServerItem | null>(null);
+  const [tunnelServer, setTunnelServer] = useState<ServerItem | null>(null);
+  const [tunnelCommandCopied, setTunnelCommandCopied] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [formMessage, setFormMessage] = useState("");
   const [deleteMessage, setDeleteMessage] = useState("");
@@ -222,6 +228,38 @@ export default function AdminServersPage() {
     setSelectedServer(server);
     setDeleteMessage("");
     setOpenDeleteDialog(true);
+  };
+
+  const handleOpenTunnelDialog = (server: ServerItem) => {
+    setTunnelServer(server);
+    setTunnelCommandCopied(false);
+    setOpenTunnelDialog(true);
+  };
+
+  const handleTunnelDialogChange = (open: boolean) => {
+    setOpenTunnelDialog(open);
+
+    if (!open) {
+      setTunnelServer(null);
+      setTunnelCommandCopied(false);
+    }
+  };
+
+  const tunnelCommand = tunnelServer
+    ? `ssh -N -L 5901:127.0.0.1:5901 -o ServerAliveInterval=60 -o ServerAliveCountMax=3 root@${tunnelServer.ipAddress}`
+    : "";
+
+  const handleCopyTunnelCommand = async () => {
+    if (!tunnelCommand) return;
+
+    try {
+      await navigator.clipboard.writeText(tunnelCommand);
+      setTunnelCommandCopied(true);
+      toast.success("Tunnel command copied.");
+      window.setTimeout(() => setTunnelCommandCopied(false), 1_500);
+    } catch {
+      toast.error("Failed to copy tunnel command.");
+    }
   };
 
   const handleCheckServerHealth = async (server: ServerItem) => {
@@ -582,6 +620,16 @@ export default function AdminServersPage() {
                         <Button
                           type="button"
                           variant="outline"
+                          title="Show VNC tunnel command"
+                          onClick={() => handleOpenTunnelDialog(server)}
+                          className="h-7 gap-1 rounded-md border-violet-200 bg-white px-2 text-xs text-violet-700 hover:bg-violet-50 hover:text-violet-700"
+                        >
+                          <SquareTerminal className="h-3.5 w-3.5" />
+                          Tunnel
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
                           title="Check pySync server health"
                           onClick={() => handleCheckServerHealth(server)}
                           disabled={checkingServerId !== null}
@@ -677,6 +725,44 @@ export default function AdminServersPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openTunnelDialog} onOpenChange={handleTunnelDialogChange}>
+        <DialogContent className="rounded-md border border-slate-200 bg-white p-0 text-gray-900 shadow-xl sm:max-w-2xl">
+          <DialogHeader className="border-b border-gray-100 bg-gray-50 px-5 py-4">
+            <DialogTitle>VNC Tunnel</DialogTitle>
+            <DialogDescription>
+              Copy this command and run it from your local terminal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 px-5 py-5">
+            <div className="rounded-md border border-slate-200 bg-slate-950 p-4">
+              <code className="block break-all font-mono text-xs leading-6 text-emerald-300 sm:text-sm">
+                {tunnelCommand}
+              </code>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-800 sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                After the tunnel connects, open{" "}
+                <code className="font-semibold">vnc://127.0.0.1:5901</code>.
+              </span>
+              <Button
+                type="button"
+                onClick={handleCopyTunnelCommand}
+                className="h-8 shrink-0 gap-2 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
+              >
+                {tunnelCommandCopied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                {tunnelCommandCopied ? "Copied" : "Copy Command"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
