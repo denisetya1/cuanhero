@@ -349,6 +349,8 @@ export default function AdminUserTradingAccountsPage({
     useState<TradingAccountItem | null>(null);
   const [terminateAccount, setTerminateAccount] =
     useState<TradingAccountItem | null>(null);
+  const [restartAccount, setRestartAccount] =
+    useState<TradingAccountItem | null>(null);
   const [deleteAccount, setDeleteAccount] =
     useState<TradingAccountItem | null>(null);
   const [configAccount, setConfigAccount] =
@@ -367,7 +369,7 @@ export default function AdminUserTradingAccountsPage({
   const [editMessage, setEditMessage] = useState("");
   const [runtimeAction, setRuntimeAction] = useState<{
     accountId: number;
-    action: "deploy" | "pause" | "resume" | "terminate";
+    action: "deploy" | "pause" | "resume" | "restart" | "terminate";
   } | null>(null);
   const [notifyingAccountId, setNotifyingAccountId] = useState<number | null>(
     null,
@@ -696,7 +698,7 @@ export default function AdminUserTradingAccountsPage({
 
   const handleRuntimeAction = async (
     account: TradingAccountItem,
-    action: "deploy" | "pause" | "resume" | "terminate",
+    action: "deploy" | "pause" | "resume" | "restart" | "terminate",
   ) => {
     setRuntimeAction({ accountId: account.id, action });
 
@@ -714,7 +716,9 @@ export default function AdminUserTradingAccountsPage({
             ? "Bot berhasil dipause."
             : action === "resume"
               ? "Bot sedang di-resume."
-            : "Bot dan instance berhasil diterminate.";
+              : action === "restart"
+                ? "MT5 berhasil di-force restart."
+                : "Bot dan instance berhasil diterminate.";
       toast.success(successMessage);
 
       await Promise.all([
@@ -1025,6 +1029,25 @@ export default function AdminUserTradingAccountsPage({
                         <Button
                           type="button"
                           variant="outline"
+                          title="Restart MT5 tanpa menghapus instance"
+                          disabled={
+                            runtimeAction !== null ||
+                            ![1, 2, 3].includes(account.eaStatus)
+                          }
+                          onClick={() => setRestartAccount(account)}
+                          className="h-7 gap-1 rounded-md border-violet-200 bg-white px-2 text-xs text-violet-700 hover:bg-violet-50 hover:text-violet-700"
+                        >
+                          {runtimeAction?.accountId === account.id &&
+                          runtimeAction.action === "restart" ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          )}
+                          Restart
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
                           title="View latest MT5 screenshot"
                           disabled={
                             runtimeAction !== null ||
@@ -1236,6 +1259,70 @@ export default function AdminUserTradingAccountsPage({
                 />
               ) : null}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={restartAccount !== null}
+        onOpenChange={(open) => {
+          if (!open && runtimeAction === null) setRestartAccount(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="overflow-hidden rounded-md border border-slate-200 bg-white p-0 text-gray-900 shadow-xl sm:max-w-md"
+        >
+          <DialogHeader className="border-b border-gray-100 bg-gray-50 px-5 py-4">
+            <DialogTitle>Force Restart MT5</DialogTitle>
+            <DialogDescription>
+              Restart runtime tanpa menghapus instance atau konfigurasi.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-5 py-5">
+            <div className="flex gap-3 rounded-md border border-violet-100 bg-violet-50 p-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                <RefreshCw className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  Restart{" "}
+                  {restartAccount?.accountName || restartAccount?.accountId}?
+                </p>
+                <p className="mt-1 text-sm leading-5 text-gray-600">
+                  Proses MT5 akan dihentikan lalu dijalankan kembali memakai
+                  account.ini. Instance, config Redis, dan data account tidak
+                  dihapus. EA akan berhenti sementara selama proses restart.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={runtimeAction !== null}
+              onClick={() => setRestartAccount(null)}
+              className="border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!restartAccount || runtimeAction !== null}
+              onClick={() => {
+                if (!restartAccount) return;
+
+                const account = restartAccount;
+                setRestartAccount(null);
+                void handleRuntimeAction(account, "restart");
+              }}
+              className="bg-violet-600 text-white hover:bg-violet-700"
+            >
+              Force Restart
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

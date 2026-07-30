@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ChevronDown,
   CircleArrowUp,
+  CircleStop,
   CreditCard,
   ImageIcon,
   PowerOff,
@@ -622,6 +623,8 @@ export default function MemberHomeDashboard() {
   const [screenshotRequestId, setScreenshotRequestId] = useState(0);
   const [isDisableAllOpen, setIsDisableAllOpen] = useState(false);
   const [isDisablingAll, setIsDisablingAll] = useState(false);
+  const [isCloseAllOpen, setIsCloseAllOpen] = useState(false);
+  const [isClosingAll, setIsClosingAll] = useState(false);
   const tradingAccounts: TradingAccount[] = useMemo(
     () =>
       ((data?.data || []) as TradingAccount[]).filter(
@@ -694,6 +697,7 @@ export default function MemberHomeDashboard() {
   const floatingProfit = Number(selectedAccount?.accountFloating);
   const canViewScreenshot =
     Boolean(selectedAccount) && currentEAStatus !== 0 && currentEAStatus !== 4;
+  const canCloseAllTrades = Boolean(selectedAccount) && currentEAStatus === 1;
   const screenshotUrl = selectedAccount
     ? `/api/member/trading-accounts/${selectedAccount.id}/screenshot?v=${screenshotRequestId}`
     : "";
@@ -875,6 +879,32 @@ export default function MemberHomeDashboard() {
       );
     } finally {
       setIsDisablingAll(false);
+    }
+  };
+
+  const handleCloseAllTrades = async () => {
+    if (!selectedAccount || !canCloseAllTrades) return;
+
+    setIsClosingAll(true);
+    try {
+      await fetch(
+        `/api/member/trading-accounts/${selectedAccount.id}/close-all`,
+        { method: "POST" },
+      ).then(handleRes);
+      await queryClient.invalidateQueries({ queryKey: ["trading-accounts"] });
+      configForm.setValue("EnableBot", false, { shouldDirty: false });
+      setIsCloseAllOpen(false);
+      toast.success(
+        "Close All command queued. The EA is closing its managed trades.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to queue the Close All command.",
+      );
+    } finally {
+      setIsClosingAll(false);
     }
   };
 
@@ -1311,6 +1341,17 @@ export default function MemberHomeDashboard() {
                 <ImageIcon className="h-4 w-4" />
                 View Screenshot
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canCloseAllTrades || isClosingAll}
+                onClick={() => setIsCloseAllOpen(true)}
+                className="mt-3 border-red-400/35 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-white"
+              >
+                <CircleStop className="h-4 w-4" />
+                Close All Trades
+              </Button>
             </div>
           </div>
         </section>
@@ -1408,6 +1449,53 @@ export default function MemberHomeDashboard() {
         </section>
         <div aria-hidden="true" className="h-0 lg:h-16" />
       </form>
+
+      <Dialog
+        open={isCloseAllOpen}
+        onOpenChange={(open) => {
+          if (!isClosingAll) setIsCloseAllOpen(open);
+        }}
+      >
+        <DialogContent className="border-red-400/25 bg-[rgba(3,10,24,0.98)] text-white shadow-[0_0_45px_rgba(239,68,68,0.14)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <CircleStop className="h-5 w-5 text-red-300" />
+              Close all EA trades?
+            </DialogTitle>
+            <DialogDescription className="leading-6 text-slate-400">
+              This immediately disables Auto Trade, deletes pending orders, and
+              closes open positions managed by CuanHero on trading account{" "}
+              <strong className="text-slate-200">
+                {selectedAccount?.accountId || "-"}
+              </strong>
+              . Manual trades are not affected. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isClosingAll}
+              onClick={() => setIsCloseAllOpen(false)}
+              className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-800 hover:text-white"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={isClosingAll}
+              onClick={handleCloseAllTrades}
+              className="bg-red-600 text-white hover:bg-red-500"
+            >
+              <CircleStop
+                className={`h-4 w-4 ${isClosingAll ? "animate-pulse" : ""}`}
+              />
+              {isClosingAll ? "Closing..." : "Close All Trades"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isDisableAllOpen}

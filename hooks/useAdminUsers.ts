@@ -47,7 +47,13 @@ export type AdminUpdateTradingAccountPayload = Omit<
 export type AdminTradingAccountRuntimePayload = {
   userId: string;
   tradingAccountId: number;
-  action: "deploy" | "pause" | "resume" | "terminate" | "health";
+  action:
+    | "deploy"
+    | "pause"
+    | "resume"
+    | "restart"
+    | "terminate"
+    | "health";
 };
 
 export type AdminTradingAccountConfigPayload = {

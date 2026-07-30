@@ -54,7 +54,9 @@ export const POST = async (
 
   if (
     !tradingAccountId ||
-    !["deploy", "pause", "resume", "terminate", "health"].includes(action)
+    !["deploy", "pause", "resume", "restart", "terminate", "health"].includes(
+      action,
+    )
   ) {
     return buildErrorResponse(
       "INVALID_RUNTIME_ACTION",
@@ -141,6 +143,14 @@ export const POST = async (
     return buildErrorResponse(
       "BOT_NOT_PAUSED",
       "Bot hanya dapat di-resume setelah dipause.",
+      [],
+    );
+  }
+
+  if (action === "restart" && [0, 4].includes(account.eaStatus)) {
+    return buildErrorResponse(
+      "BOT_NOT_DEPLOYED",
+      "Force restart hanya tersedia untuk bot yang sudah pernah dideploy.",
       [],
     );
   }
@@ -232,9 +242,11 @@ export const POST = async (
   const suffix =
     action === "terminate"
       ? "/terminate"
-      : action === "resume"
-        ? "/resume"
-        : "";
+      : action === "restart"
+        ? "/restart"
+        : action === "resume"
+          ? "/resume"
+          : "";
   const url =
     action === "health"
       ? `${pySyncBaseUrl}/api/health/status/${clientId}`
@@ -243,7 +255,7 @@ export const POST = async (
   try {
     const response = await fetch(url, {
       method:
-        action === "deploy" || action === "resume"
+        action === "deploy" || action === "resume" || action === "restart"
           ? "POST"
           : action === "health"
             ? "GET"
@@ -283,7 +295,7 @@ export const POST = async (
     }
 
     let eaStatus =
-      action === "deploy" || action === "resume"
+      action === "deploy" || action === "resume" || action === "restart"
         ? 1
         : action === "pause"
           ? 2
