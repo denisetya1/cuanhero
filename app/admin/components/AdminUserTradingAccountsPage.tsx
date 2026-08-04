@@ -64,6 +64,7 @@ import {
 import AdminTablePagination, {
   DEFAULT_TABLE_PAGE_SIZE,
 } from "./AdminTablePagination";
+import { EXNESS_TRADING_SERVER_OPTIONS } from "@/lib/trading-server-options";
 
 type TradingAccountItem = {
   id: number;
@@ -137,11 +138,6 @@ const adminSelectItemClass =
 
 const currencyOptions = ["IDR", "USD", "MYR", "SGD"];
 
-const tradingServerOptions = Array.from(
-  { length: 45 },
-  (_, index) => `Exness-MT5Real${index + 1}`,
-);
-
 const statusOptions = [
   { label: "Inactive", value: "0" },
   { label: "Active", value: "1" },
@@ -202,7 +198,7 @@ const getTradingAccountDefaultValues = (
   return {
     accountId: "",
     password: "",
-    server: tradingServerOptions[0],
+    server: EXNESS_TRADING_SERVER_OPTIONS[0],
     serverId: availableServer ? String(availableServer.id) : "",
     packageId: "",
     expertAdvisorId: expertAdvisors[0] ? String(expertAdvisors[0].id) : "",
@@ -246,7 +242,7 @@ const getEditTradingAccountDefaultValues = (
 ): EditTradingAccountFormValues => ({
   accountId: account?.accountId || "",
   password: "",
-  server: account?.accountServer || tradingServerOptions[0],
+  server: account?.accountServer || EXNESS_TRADING_SERVER_OPTIONS[0],
   serverId: account?.serverId ? String(account.serverId) : "",
   packageId: account?.packageId ? String(account.packageId) : "",
   expertAdvisorId: account?.expertAdvisorId
@@ -413,6 +409,26 @@ export default function AdminUserTradingAccountsPage({
     resolver: zodResolver(editTradingAccountSchema),
     defaultValues: getEditTradingAccountDefaultValues(),
   });
+  const editPackageId = useWatch({
+    control: editTradingAccountForm.control,
+    name: "packageId",
+  });
+  const selectedEditPackage = packages.find(
+    (packageItem) => String(packageItem.id) === editPackageId,
+  );
+  const editRequiresIbVerification = Boolean(
+    selectedEditPackage?.code &&
+      ibPackageCodes.has(selectedEditPackage.code.trim().toUpperCase()),
+  );
+  const currentEditTradingServer = useWatch({
+    control: editTradingAccountForm.control,
+    name: "server",
+  });
+  const editExnessServerOptions =
+    currentEditTradingServer &&
+    !EXNESS_TRADING_SERVER_OPTIONS.includes(currentEditTradingServer)
+      ? [currentEditTradingServer, ...EXNESS_TRADING_SERVER_OPTIONS]
+      : EXNESS_TRADING_SERVER_OPTIONS;
 
   const handleDialogChange = (open: boolean) => {
     setOpenCreateDialog(open);
@@ -1555,6 +1571,21 @@ export default function AdminUserTradingAccountsPage({
                       onValueChange={(value) => {
                         field.onChange(value);
                         resetIbVerification();
+                        const nextPackage = packages.find(
+                          (packageItem) => String(packageItem.id) === value,
+                        );
+                        const nextRequiresIb = Boolean(
+                          nextPackage?.code &&
+                            ibPackageCodes.has(
+                              nextPackage.code.trim().toUpperCase(),
+                            ),
+                        );
+                        createTradingAccountForm.setValue(
+                          "server",
+                          nextRequiresIb
+                            ? EXNESS_TRADING_SERVER_OPTIONS[0]
+                            : "",
+                        );
                       }}
                     >
                       <SelectTrigger className={adminSelectTriggerClass}>
@@ -1599,7 +1630,11 @@ export default function AdminUserTradingAccountsPage({
                       onChange: resetIbVerification,
                     })}
                     inputMode="numeric"
-                    placeholder="Enter Exness account ID"
+                    placeholder={
+                      requiresIbVerification
+                        ? "Enter Exness account ID"
+                        : "Enter MT5 account ID"
+                    }
                     className={adminInputClass}
                   />
                   {requiresIbVerification && (
@@ -1668,28 +1703,44 @@ export default function AdminUserTradingAccountsPage({
                 <span className="text-sm font-medium text-gray-700">
                   Trading Server
                 </span>
-                <Controller
-                  control={createTradingAccountForm.control}
-                  name="server"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className={adminSelectTriggerClass}>
-                        <SelectValue placeholder="Select trading server" />
-                      </SelectTrigger>
-                      <SelectContent className={adminSelectContentClass}>
-                        {tradingServerOptions.map((server) => (
-                          <SelectItem
-                            key={server}
-                            value={server}
-                            className={adminSelectItemClass}
-                          >
-                            {server}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
+                {requiresIbVerification ? (
+                  <Controller
+                    control={createTradingAccountForm.control}
+                    name="server"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className={adminSelectTriggerClass}>
+                          <SelectValue placeholder="Select Exness server" />
+                        </SelectTrigger>
+                        <SelectContent className={adminSelectContentClass}>
+                          {EXNESS_TRADING_SERVER_OPTIONS.map((server) => (
+                            <SelectItem
+                              key={server}
+                              value={server}
+                              className={adminSelectItemClass}
+                            >
+                              {server}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                ) : (
+                  <Input
+                    {...createTradingAccountForm.register("server")}
+                    placeholder="Example: BrokerName-MT5Live"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className={adminInputClass}
+                  />
+                )}
+                {!requiresIbVerification && (
+                  <span className="block text-xs leading-5 text-gray-500">
+                    Enter the exact server name shown in MetaTrader 5.
+                  </span>
+                )}
                 {createTradingAccountForm.formState.errors.server && (
                   <span className="text-xs text-red-600">
                     {createTradingAccountForm.formState.errors.server.message}
@@ -2030,28 +2081,39 @@ export default function AdminUserTradingAccountsPage({
                 <span className="text-sm font-medium text-gray-700">
                   Trading Server
                 </span>
-                <Controller
-                  control={editTradingAccountForm.control}
-                  name="server"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className={adminSelectTriggerClass}>
-                        <SelectValue placeholder="Select trading server" />
-                      </SelectTrigger>
-                      <SelectContent className={adminSelectContentClass}>
-                        {tradingServerOptions.map((server) => (
-                          <SelectItem
-                            key={server}
-                            value={server}
-                            className={adminSelectItemClass}
-                          >
-                            {server}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
+                {editRequiresIbVerification ? (
+                  <Controller
+                    control={editTradingAccountForm.control}
+                    name="server"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className={adminSelectTriggerClass}>
+                          <SelectValue placeholder="Select Exness server" />
+                        </SelectTrigger>
+                        <SelectContent className={adminSelectContentClass}>
+                          {editExnessServerOptions.map((server) => (
+                            <SelectItem
+                              key={server}
+                              value={server}
+                              className={adminSelectItemClass}
+                            >
+                              {server}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                ) : (
+                  <Input
+                    {...editTradingAccountForm.register("server")}
+                    placeholder="Example: BrokerName-MT5Live"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className={adminInputClass}
+                  />
+                )}
                 {editTradingAccountForm.formState.errors.server && (
                   <span className="text-xs text-red-600">
                     {editTradingAccountForm.formState.errors.server.message}
@@ -2113,7 +2175,27 @@ export default function AdminUserTradingAccountsPage({
                     control={editTradingAccountForm.control}
                     name="packageId"
                     render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select
+                        value={field.value}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          const nextPackage = packages.find(
+                            (packageItem) => String(packageItem.id) === value,
+                          );
+                          const nextRequiresIb = Boolean(
+                            nextPackage?.code &&
+                              ibPackageCodes.has(
+                                nextPackage.code.trim().toUpperCase(),
+                              ),
+                          );
+                          if (nextRequiresIb) {
+                            editTradingAccountForm.setValue(
+                              "server",
+                              EXNESS_TRADING_SERVER_OPTIONS[0],
+                            );
+                          }
+                        }}
+                      >
                         <SelectTrigger className={adminSelectTriggerClass}>
                           <SelectValue placeholder="Select package" />
                         </SelectTrigger>

@@ -3,16 +3,21 @@
 import { Eye, EyeOff, Loader2, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { EXNESS_TRADING_SERVER_OPTIONS } from "@/lib/trading-server-options";
 
 export default function SetupTradingAccountForm({
   orderNumber,
+  requiresIbVerification,
 }: {
   orderNumber: string;
+  requiresIbVerification: boolean;
 }) {
   const router = useRouter();
   const [accountId, setAccountId] = useState("");
   const [password, setPassword] = useState("");
-  const [accountServer, setAccountServer] = useState("");
+  const [accountServer, setAccountServer] = useState(
+    requiresIbVerification ? EXNESS_TRADING_SERVER_OPTIONS[0] : "",
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -97,17 +102,38 @@ export default function SetupTradingAccountForm({
         <label htmlFor="mt5-server" className="text-sm font-semibold text-slate-200">
           Broker Server
         </label>
-        <input
-          id="mt5-server"
-          value={accountServer}
-          onChange={(event) => setAccountServer(event.target.value)}
-          autoComplete="off"
-          placeholder="Example: Exness-MT5Real20"
-          required
-          className="mt-2 h-12 w-full rounded-xl border border-cyan-400/20 bg-[#020611] px-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300"
-        />
+        {requiresIbVerification ? (
+          <select
+            id="mt5-server"
+            value={accountServer}
+            onChange={(event) => setAccountServer(event.target.value)}
+            required
+            className="mt-2 h-12 w-full rounded-xl border border-cyan-400/20 bg-[#020611] px-4 text-sm text-white outline-none transition focus:border-cyan-300"
+          >
+            {EXNESS_TRADING_SERVER_OPTIONS.map((server) => (
+              <option key={server} value={server}>
+                {server}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id="mt5-server"
+            value={accountServer}
+            onChange={(event) => setAccountServer(event.target.value)}
+            autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="Example: BrokerName-MT5Live"
+            required
+            className="mt-2 h-12 w-full rounded-xl border border-cyan-400/20 bg-[#020611] px-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300"
+          />
+        )}
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          Use the exact server name shown in your MetaTrader 5 account.
+          {requiresIbVerification
+            ? "Select the Exness server used by your MT5 account."
+            : "Enter the exact server name shown in your MetaTrader 5 account."}
         </p>
       </div>
 

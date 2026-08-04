@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { IB_VERIFICATION_PACKAGE_CODES } from "@/lib/ib-verification";
 import prisma from "@/lib/prisma";
 import { ArrowLeft, LockKeyhole, ShieldCheck } from "lucide-react";
 import { headers } from "next/headers";
@@ -29,7 +30,7 @@ export default async function TradingAccountSetupPage({
       tradingAccountId: true,
       setupRequest: { select: { id: true } },
       expertAdvisor: { select: { name: true } },
-      package: { select: { name: true } },
+      package: { select: { name: true, code: true } },
     },
   });
 
@@ -76,7 +77,12 @@ export default async function TradingAccountSetupPage({
           verify the account, assign a VPS, and deploy the robot.
         </div>
 
-        <SetupTradingAccountForm orderNumber={order.orderNumber} />
+        <SetupTradingAccountForm
+          orderNumber={order.orderNumber}
+          requiresIbVerification={IB_VERIFICATION_PACKAGE_CODES.has(
+            order.package.code?.trim().toUpperCase() || "",
+          )}
+        />
       </div>
     </section>
   );
