@@ -72,6 +72,7 @@ export const POST = async (
       accountId: true,
       accountPassword: true,
       accountServer: true,
+      accountType: true,
       eaConfiguration: true,
       status: true,
       eaStatus: true,
@@ -270,6 +271,7 @@ export const POST = async (
           login: account.accountId,
           password,
           server: account.accountServer,
+          symbol: account.accountType === "STANDARD" ? "XAUUSD" : "XAUUSDc",
           ...(account.expertAdvisor.eaFileName && {
             expert: account.expertAdvisor.eaFileName,
           }),

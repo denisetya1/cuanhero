@@ -100,6 +100,7 @@ export const GET = async (
           expertAdvisorId: true,
           accountName: true,
           accountServer: true,
+          accountType: true,
           accountBalance: true,
           recurringPrice: true,
           currency: true,
@@ -170,6 +171,9 @@ export const POST = async (
   const accountId = String(body.accountId || "").trim();
   const password = String(body.password || "");
   const server = String(body.server || "").trim();
+  const accountType = String(body.accountType || "CENT")
+    .trim()
+    .toUpperCase();
   const serverId = Number(body.serverId);
   const packageId = Number(body.packageId);
   const expertAdvisorId = Number(body.expertAdvisorId);
@@ -181,6 +185,7 @@ export const POST = async (
   const endDate = body.endDate ? String(body.endDate).trim() : "";
   const ibVerificationToken = String(body.ibVerificationToken || "");
   const allowedCurrencies = ["IDR", "USD", "MYR", "SGD"];
+  const allowedAccountTypes = ["STANDARD", "CENT"];
   const recurringPriceNumber = Number(recurringPrice);
 
   if (
@@ -204,6 +209,14 @@ export const POST = async (
     return buildErrorResponse(
       "VALIDATION_ERROR",
       "Currency must be IDR, USD, MYR, or SGD.",
+      [],
+    );
+  }
+
+  if (!allowedAccountTypes.includes(accountType)) {
+    return buildErrorResponse(
+      "VALIDATION_ERROR",
+      "Account type must be Standard or Cent.",
       [],
     );
   }
@@ -356,6 +369,7 @@ export const POST = async (
           accountId,
           accountPassword: encryptText(password),
           accountServer: server,
+          accountType,
           userId,
           serverId,
           packageId: selectedPackage.id,
@@ -374,6 +388,7 @@ export const POST = async (
           id: true,
           accountId: true,
           accountServer: true,
+          accountType: true,
           serverId: true,
           recurringPrice: true,
           currency: true,
@@ -546,6 +561,9 @@ export const PATCH = async (
   const loginId = String(body.loginId || "").trim();
   const password = String(body.password || "");
   const server = String(body.server || "").trim();
+  const accountType = String(body.accountType || "CENT")
+    .trim()
+    .toUpperCase();
   const serverId = Number(body.serverId);
   const packageId = Number(body.packageId);
   const expertAdvisorId = Number(body.expertAdvisorId);
@@ -556,6 +574,7 @@ export const PATCH = async (
   const status = Number(body.status);
   const endDate = body.endDate ? String(body.endDate).trim() : "";
   const allowedCurrencies = ["IDR", "USD", "MYR", "SGD"];
+  const allowedAccountTypes = ["STANDARD", "CENT"];
 
   if (
     !accountId ||
@@ -579,6 +598,15 @@ export const PATCH = async (
     return buildErrorResponse(
       "VALIDATION_ERROR",
       "Currency must be IDR, USD, MYR, or SGD.",
+      [],
+    );
+  }
+
+
+  if (!allowedAccountTypes.includes(accountType)) {
+    return buildErrorResponse(
+      "VALIDATION_ERROR",
+      "Account type must be Standard or Cent.",
       [],
     );
   }
@@ -704,6 +732,7 @@ export const PATCH = async (
         accountPassword: encryptText(password),
       }),
       accountServer: server,
+      accountType,
       serverId,
       packageId,
       expertAdvisorId,
@@ -715,6 +744,7 @@ export const PATCH = async (
     select: {
       id: true,
       accountId: true,
+      accountType: true,
       status: true,
       endDate: true,
     },

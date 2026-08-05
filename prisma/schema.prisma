@@ -127,6 +127,7 @@ model TradingAccount {
   accountId            String                            @unique @map("account_id")
   accountPassword      String?                           @map("account_password")
   accountServer        String?                           @map("account_server")
+  accountType          String                            @default("CENT") @map("account_type") @db.VarChar(20)
   accountName          String?                           @map("account_name")
   accountBalance       String?                           @map("account_balance")
   accountEquity        String?                           @map("account_equity")

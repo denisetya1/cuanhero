@@ -74,6 +74,7 @@ type TradingAccountItem = {
   serverId?: number | null;
   accountName?: string | null;
   accountServer?: string | null;
+  accountType?: "STANDARD" | "CENT" | null;
   accountBalance?: string | null;
   tradingPassword?: string | null;
   recurringPrice?: string | null;
@@ -144,6 +145,11 @@ const statusOptions = [
   { label: "Suspended", value: "2" },
 ];
 
+const accountTypeOptions = [
+  { label: "Standard", value: "STANDARD" },
+  { label: "Cent", value: "CENT" },
+] as const;
+
 const ibPackageCodes = new Set(["FREE_TRIAL", "IB_MONTHLY"]);
 
 type IbVerificationState = {
@@ -170,6 +176,7 @@ const tradingAccountSchema = z.object({
   accountId: z.string().trim().min(1, "Account ID is required."),
   password: z.string().min(1, "Password is required."),
   server: z.string().trim().min(1, "Trading server is required."),
+  accountType: z.enum(["STANDARD", "CENT"]),
   serverId: z.string().trim().min(1, "VPS server is required."),
   packageId: z.string().trim().min(1, "Package is required."),
   expertAdvisorId: z.string().trim().min(1, "Expert Advisor is required."),
@@ -199,6 +206,7 @@ const getTradingAccountDefaultValues = (
     accountId: "",
     password: "",
     server: EXNESS_TRADING_SERVER_OPTIONS[0],
+    accountType: "CENT",
     serverId: availableServer ? String(availableServer.id) : "",
     packageId: "",
     expertAdvisorId: expertAdvisors[0] ? String(expertAdvisors[0].id) : "",
@@ -243,6 +251,7 @@ const getEditTradingAccountDefaultValues = (
   accountId: account?.accountId || "",
   password: "",
   server: account?.accountServer || EXNESS_TRADING_SERVER_OPTIONS[0],
+  accountType: account?.accountType === "STANDARD" ? "STANDARD" : "CENT",
   serverId: account?.serverId ? String(account.serverId) : "",
   packageId: account?.packageId ? String(account.packageId) : "",
   expertAdvisorId: account?.expertAdvisorId
@@ -480,6 +489,15 @@ export default function AdminUserTradingAccountsPage({
         throw new Error("Exness verification did not return a valid token.");
       }
 
+      if (result.accountType) {
+        createTradingAccountForm.setValue(
+          "accountType",
+          result.accountType.toLowerCase().includes("cent")
+            ? "CENT"
+            : "STANDARD",
+        );
+      }
+
       setIbVerification({
         status: "verified",
         token: result.verificationToken,
@@ -642,6 +660,7 @@ export default function AdminUserTradingAccountsPage({
         accountId: values.accountId.trim(),
         password: values.password,
         server: values.server,
+        accountType: values.accountType,
         serverId: Number(values.serverId),
         packageId: Number(values.packageId),
         expertAdvisorId: Number(values.expertAdvisorId),
@@ -686,6 +705,7 @@ export default function AdminUserTradingAccountsPage({
         loginId: values.accountId.trim(),
         password: values.password || "",
         server: values.server,
+        accountType: values.accountType,
         serverId: Number(values.serverId),
         packageId: Number(values.packageId),
         expertAdvisorId: Number(values.expertAdvisorId),
@@ -935,7 +955,10 @@ export default function AdminUserTradingAccountsPage({
                       )}
                     </td>
                     <td className="px-5 py-4 text-gray-600">
-                      {account.accountServer || "-"}
+                      <p>{account.accountServer || "-"}</p>
+                      <span className="mt-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                        {account.accountType === "STANDARD" ? "Standard" : "Cent"}
+                      </span>
                     </td>
                     <td className="px-5 py-4 text-gray-600">
                       {account.server?.name || "-"}
@@ -1750,6 +1773,34 @@ export default function AdminUserTradingAccountsPage({
 
               <label className="block space-y-2.5">
                 <span className="text-sm font-medium text-gray-700">
+                  Account Type
+                </span>
+                <Controller
+                  control={createTradingAccountForm.control}
+                  name="accountType"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className={adminSelectTriggerClass}>
+                        <SelectValue placeholder="Select account type" />
+                      </SelectTrigger>
+                      <SelectContent className={adminSelectContentClass}>
+                        {accountTypeOptions.map((option) => (
+                          <SelectItem
+                            key={option.value}
+                            value={option.value}
+                            className={adminSelectItemClass}
+                          >
+                            {option.label} ({option.value === "STANDARD" ? "XAUUSD" : "XAUUSDc"})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </label>
+
+              <label className="block space-y-2.5">
+                <span className="text-sm font-medium text-gray-700">
                   VPS Server
                 </span>
                 <Controller
@@ -2119,6 +2170,34 @@ export default function AdminUserTradingAccountsPage({
                     {editTradingAccountForm.formState.errors.server.message}
                   </span>
                 )}
+              </label>
+
+              <label className="block space-y-2.5">
+                <span className="text-sm font-medium text-gray-700">
+                  Account Type
+                </span>
+                <Controller
+                  control={editTradingAccountForm.control}
+                  name="accountType"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className={adminSelectTriggerClass}>
+                        <SelectValue placeholder="Select account type" />
+                      </SelectTrigger>
+                      <SelectContent className={adminSelectContentClass}>
+                        {accountTypeOptions.map((option) => (
+                          <SelectItem
+                            key={option.value}
+                            value={option.value}
+                            className={adminSelectItemClass}
+                          >
+                            {option.label} ({option.value === "STANDARD" ? "XAUUSD" : "XAUUSDc"})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </label>
 
               <label className="block space-y-2.5">

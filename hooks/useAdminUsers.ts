@@ -19,6 +19,7 @@ export type AdminTradingAccountPayload = {
   accountId: string;
   password: string;
   server: string;
+  accountType: "STANDARD" | "CENT";
   serverId: number;
   packageId: number;
   expertAdvisorId: number;
@@ -105,6 +106,7 @@ export const useCreateAdminTradingAccount = () => {
             accountId: payload.accountId,
             password: payload.password,
             server: payload.server,
+            accountType: payload.accountType,
             serverId: payload.serverId,
             packageId: payload.packageId,
             expertAdvisorId: payload.expertAdvisorId,
