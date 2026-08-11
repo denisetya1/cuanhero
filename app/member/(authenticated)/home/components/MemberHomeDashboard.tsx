@@ -73,6 +73,14 @@ type EAConfiguration = {
   BuyMagic: string;
   SellMagic: string;
   SlippagePoints: string;
+  ADXPeriod: string;
+  ADXMinimum: string;
+  RiskMode: "FIXED" | "DYNAMIC";
+  FixedSLPoint: string;
+  FixedTPPoint: string;
+  DynamicLookbackBars: string;
+  TrailingStartPoint: string;
+  DebugMode: boolean;
 };
 
 type StoredEAConfiguration = Record<string, unknown>;
@@ -265,7 +273,8 @@ const formatUtcOffset = (offsetMinutes: number) => {
 const parseConfig = (
   value?: StoredEAConfiguration | null,
   timeZoneOffsetMinutes = 7 * 60,
-) => {
+  isOneShot = false,
+): EAConfiguration => {
   const defaultConfig: EAConfiguration = {
     EnableBot: false,
     StartLot: "0.01",
@@ -296,7 +305,26 @@ const parseConfig = (
     BuyMagic: "1001",
     SellMagic: "1002",
     SlippagePoints: "30",
+    ADXPeriod: "14",
+    ADXMinimum: "30",
+    RiskMode: "FIXED",
+    FixedSLPoint: "500",
+    FixedTPPoint: "500",
+    DynamicLookbackBars: "10",
+    TrailingStartPoint: "500",
+    DebugMode: true,
   };
+
+  if (isOneShot) {
+    defaultConfig.Oversold = "30";
+    defaultConfig.Overbought = "70";
+    defaultConfig.StartTime = "00:00:00";
+    defaultConfig.EndTime = "21:00:00";
+    defaultConfig.PauseStartTime = "22:00:00";
+    defaultConfig.PauseEndTime = "00:00:00";
+    defaultConfig.BuyMagic = "1101";
+    defaultConfig.SellMagic = "1102";
+  }
 
   if (!value) return defaultConfig;
 
@@ -390,6 +418,22 @@ const parseConfig = (
     BuyMagic: readString("BuyMagic"),
     SellMagic: readString("SellMagic"),
     SlippagePoints: readString("SlippagePoints"),
+    ADXPeriod: readString("ADXPeriod"),
+    ADXMinimum: readString("ADXMinimum", value.ADXThreshold),
+    RiskMode:
+      String(value.RiskMode ?? "").toUpperCase().includes("DYNAMIC") ||
+      value.RiskMode === 1 ||
+      value.UseDynamicSLTP === true
+        ? "DYNAMIC"
+        : "FIXED",
+    FixedSLPoint: readString("FixedSLPoint"),
+    FixedTPPoint: readString("FixedTPPoint"),
+    DynamicLookbackBars: readString("DynamicLookbackBars"),
+    TrailingStartPoint: readString(
+      "TrailingStartPoint",
+      value.TrailingTPStartPoint,
+    ),
+    DebugMode: readBoolean("DebugMode"),
   };
 };
 
@@ -442,6 +486,14 @@ const memberConfigSchema = z.object({
   BuyMagic: requiredNumber("Buy Magic"),
   SellMagic: requiredNumber("Sell Magic"),
   SlippagePoints: requiredNumber("Slippage Points"),
+  ADXPeriod: positiveNumber("ADX Period"),
+  ADXMinimum: requiredNumber("Minimum ADX"),
+  RiskMode: z.enum(["FIXED", "DYNAMIC"]),
+  FixedSLPoint: positiveNumber("Fixed Stop Loss"),
+  FixedTPPoint: positiveNumber("Fixed Take Profit"),
+  DynamicLookbackBars: positiveNumber("Dynamic Lookback Bars"),
+  TrailingStartPoint: positiveNumber("Trailing Start Point"),
+  DebugMode: z.boolean(),
 });
 
 type MemberConfigFormValues = z.infer<typeof memberConfigSchema>;
@@ -451,10 +503,11 @@ const configFieldMeta: Record<
   ConfigFieldName,
   {
     label: string;
-    type: "switch" | "number" | "time";
+    type: "switch" | "number" | "time" | "select";
     step?: string;
     suffix?: string;
     disabled?: boolean;
+    options?: { label: string; value: string }[];
   }
 > = {
   EnableBot: { label: "Enable Auto Trade", type: "switch" },
@@ -529,6 +582,41 @@ const configFieldMeta: Record<
   BuyMagic: { label: "Buy Magic", type: "number", disabled: true },
   SellMagic: { label: "Sell Magic", type: "number", disabled: true },
   SlippagePoints: { label: "Slippage Points", type: "number" },
+  ADXPeriod: { label: "ADX Period", type: "number" },
+  ADXMinimum: {
+    label: "Minimum ADX",
+    type: "number",
+    step: "0.01",
+  },
+  RiskMode: {
+    label: "SL / TP Mode",
+    type: "select",
+    options: [
+      { label: "Fixed", value: "FIXED" },
+      { label: "Dynamic 1:1", value: "DYNAMIC" },
+    ],
+  },
+  FixedSLPoint: {
+    label: "Fixed Stop Loss",
+    type: "number",
+    suffix: "Point",
+  },
+  FixedTPPoint: {
+    label: "Fixed Take Profit",
+    type: "number",
+    suffix: "Point",
+  },
+  DynamicLookbackBars: {
+    label: "Dynamic Lookback",
+    type: "number",
+    suffix: "Bars",
+  },
+  TrailingStartPoint: {
+    label: "Trailing Start",
+    type: "number",
+    suffix: "Point",
+  },
+  DebugMode: { label: "Debug Log", type: "switch" },
 };
 
 const coreConfigRows: ConfigFieldName[][] = [
@@ -561,6 +649,38 @@ const advancedConfigRows: ConfigFieldName[][] = [
   ["BuyMagic", "SellMagic"],
   ["SlippagePoints"],
 ];
+
+const oneShotCoreConfigRows: ConfigFieldName[][] = [
+  ["EnableBot"],
+  ["StartLot"],
+  ["RSIPeriod", "ADXPeriod"],
+  ["Oversold", "Overbought"],
+  ["ADXMinimum"],
+  ["EnableBuy", "EnableSell"],
+];
+
+const oneShotBasicConfigRows: ConfigFieldName[][] = [
+  ["RiskMode"],
+  ["FixedSLPoint", "FixedTPPoint"],
+  ["DynamicLookbackBars"],
+  ["UseTrailingTP"],
+  ["TrailingStartPoint", "TrailingStepPoint"],
+  ["StartTime", "EndTime"],
+  ["EnablePauseTime"],
+  ["PauseStartTime", "PauseEndTime"],
+  ["DailyProfitTargetUSD"],
+];
+
+const oneShotAdvancedConfigRows: ConfigFieldName[][] = [
+  ["EnableNewsFilter"],
+  ["MinutesStopBeforeNewsFilter", "MinutesStartAfterNewsFilter"],
+  ["BuyMagic", "SellMagic"],
+  ["SlippagePoints"],
+  ["DebugMode"],
+];
+
+const isOneShotBotName = (name?: string | null) =>
+  (name ?? "").replace(/[\s_-]/g, "").toLowerCase().includes("oneshot");
 
 const getMemberConfigDefaultValues = (
   config: ReturnType<typeof parseConfig>,
@@ -702,9 +822,15 @@ export default function MemberHomeDashboard() {
     ? `/api/member/trading-accounts/${selectedAccount.id}/screenshot?v=${screenshotRequestId}`
     : "";
   const isConfigLocked = isSubscriptionConfigLocked(selectedAccount?.endDate);
+  const isOneShot = isOneShotBotName(selectedAccount?.expertAdvisor?.name);
   const config = useMemo(
-    () => parseConfig(selectedAccount?.eaConfiguration, timeZoneOffsetMinutes),
-    [selectedAccount?.eaConfiguration, timeZoneOffsetMinutes],
+    () =>
+      parseConfig(
+        selectedAccount?.eaConfiguration,
+        timeZoneOffsetMinutes,
+        isOneShot,
+      ),
+    [isOneShot, selectedAccount?.eaConfiguration, timeZoneOffsetMinutes],
   );
   const configForm = useForm<MemberConfigFormValues>({
     resolver: zodResolver(memberConfigSchema),
@@ -739,7 +865,7 @@ export default function MemberHomeDashboard() {
 
     configForm.reset(
       getMemberConfigDefaultValues(
-        parseConfig(defaultConfig, timeZoneOffsetMinutes),
+        parseConfig(defaultConfig, timeZoneOffsetMinutes, isOneShot),
       ),
       { keepDefaultValues: true },
     );
@@ -752,18 +878,13 @@ export default function MemberHomeDashboard() {
   const handleSaveConfig = async (values: MemberConfigFormValues) => {
     if (!selectedAccount || isConfigLocked) return;
 
-    const configuration = {
+    const sharedConfiguration = {
       TimeZone: "UTC",
       EnableBot: values.EnableBot,
       StartLot: Number(values.StartLot),
       RSIPeriod: Number(values.RSIPeriod),
       Oversold: Number(values.Oversold),
       Overbought: Number(values.Overbought),
-      LayerDistancePoint: Number(values.LayerDistancePoint),
-      LayersPerBatch: Number(values.LayersPerBatch),
-      MaxLayerCount: Number(values.MaxLayerCount),
-      RefillPendingThreshold: Number(values.RefillPendingThreshold),
-      RefillLayerCount: Number(values.RefillLayerCount),
       StartTime: shiftTimeByMinutes(
         normalizeTime(values.StartTime),
         -timeZoneOffsetMinutes,
@@ -782,11 +903,8 @@ export default function MemberHomeDashboard() {
         -timeZoneOffsetMinutes,
       ),
       UseTrailingTP: values.UseTrailingTP,
-      TrailingTPStartPoint: Number(values.TrailingTPStartPoint),
       TrailingStepPoint: Number(values.TrailingStepPoint),
       DailyProfitTargetUSD: Number(values.DailyProfitTargetUSD),
-      StopLossUSD: Number(values.StopLossUSD),
-      RestMinutesAfterCutLoss: Number(values.RestMinutesAfterCutLoss),
       MinutesStopBeforeNewsFilter: Number(values.MinutesStopBeforeNewsFilter),
       MinutesStartAfterNewsFilter: Number(values.MinutesStartAfterNewsFilter),
       SlippagePoints: Number(values.SlippagePoints),
@@ -796,6 +914,30 @@ export default function MemberHomeDashboard() {
       EnableSell: values.EnableSell,
       EnableNewsFilter: values.EnableNewsFilter,
     };
+
+    const configuration = isOneShot
+      ? {
+          ...sharedConfiguration,
+          ADXPeriod: Number(values.ADXPeriod),
+          ADXMinimum: Number(values.ADXMinimum),
+          RiskMode: values.RiskMode,
+          FixedSLPoint: Number(values.FixedSLPoint),
+          FixedTPPoint: Number(values.FixedTPPoint),
+          DynamicLookbackBars: Number(values.DynamicLookbackBars),
+          TrailingStartPoint: Number(values.TrailingStartPoint),
+          DebugMode: values.DebugMode,
+        }
+      : {
+          ...sharedConfiguration,
+          LayerDistancePoint: Number(values.LayerDistancePoint),
+          LayersPerBatch: Number(values.LayersPerBatch),
+          MaxLayerCount: Number(values.MaxLayerCount),
+          RefillPendingThreshold: Number(values.RefillPendingThreshold),
+          RefillLayerCount: Number(values.RefillLayerCount),
+          TrailingTPStartPoint: Number(values.TrailingTPStartPoint),
+          StopLossUSD: Number(values.StopLossUSD),
+          RestMinutesAfterCutLoss: Number(values.RestMinutesAfterCutLoss),
+        };
 
     setIsSaving(true);
     setSaveMessage("");
@@ -934,6 +1076,43 @@ export default function MemberHomeDashboard() {
               />
             )}
           />
+        </label>
+      );
+    }
+
+    if (meta.type === "select") {
+      return (
+        <label key={name} className="block min-w-0 space-y-2">
+          <span className="text-sm text-ch-muted">{meta.label}</span>
+          <Controller
+            control={configForm.control}
+            name={name}
+            render={({ field }) => (
+              <Select
+                value={String(field.value ?? "")}
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  setSaveMessage("");
+                }}
+              >
+                <SelectTrigger className={`${inputClass} w-full`}>
+                  <SelectValue placeholder={`Select ${meta.label}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {meta.options?.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {error?.message && (
+            <span className="text-xs text-red-300">
+              {String(error.message)}
+            </span>
+          )}
         </label>
       );
     }
@@ -1399,18 +1578,26 @@ export default function MemberHomeDashboard() {
             <fieldset disabled={isConfigLocked} className="grid gap-5">
               {renderConfigSection(
                 "Core Settings",
-                "Essential settings for enabling the bot and defining its initial lot size.",
-                coreConfigRows,
+                isOneShot
+                  ? "Enable the bot and configure the RSI + ADX entry signal."
+                  : "Essential settings for enabling the bot and defining its initial lot size.",
+                isOneShot ? oneShotCoreConfigRows : coreConfigRows,
               )}
               {renderConfigSection(
                 "Basic Settings",
-                "Trading schedule, pause window, risk targets, recovery time, and trade direction settings.",
-                basicConfigRows,
+                isOneShot
+                  ? "Configure fixed or dynamic 1:1 risk, trailing protection, and the trading schedule."
+                  : "Trading schedule, pause window, risk targets, recovery time, and trade direction settings.",
+                isOneShot ? oneShotBasicConfigRows : basicConfigRows,
               )}
               {renderConfigSection(
                 "Advanced Settings",
-                "Layering, trade direction, news filter, magic number, and order execution settings.",
-                advancedConfigRows,
+                isOneShot
+                  ? "News filtering, magic numbers, execution slippage, and diagnostic logging."
+                  : "Layering, trade direction, news filter, magic number, and order execution settings.",
+                isOneShot
+                  ? oneShotAdvancedConfigRows
+                  : advancedConfigRows,
                 true,
               )}
 
