@@ -75,7 +75,8 @@ type EAConfiguration = {
   SlippagePoints: string;
   ADXPeriod: string;
   ADXMinimum: string;
-  RiskMode: "FIXED" | "DYNAMIC";
+  SLMode: "FIXED" | "DYNAMIC";
+  TPMode: "FIXED" | "RISK_1_TO_1" | "TRAILING";
   FixedSLPoint: string;
   FixedTPPoint: string;
   DynamicLookbackBars: string;
@@ -307,7 +308,8 @@ const parseConfig = (
     SlippagePoints: "30",
     ADXPeriod: "14",
     ADXMinimum: "30",
-    RiskMode: "FIXED",
+    SLMode: "FIXED",
+    TPMode: "FIXED",
     FixedSLPoint: "500",
     FixedTPPoint: "500",
     DynamicLookbackBars: "10",
@@ -420,12 +422,32 @@ const parseConfig = (
     SlippagePoints: readString("SlippagePoints"),
     ADXPeriod: readString("ADXPeriod"),
     ADXMinimum: readString("ADXMinimum", value.ADXThreshold),
-    RiskMode:
-      String(value.RiskMode ?? "").toUpperCase().includes("DYNAMIC") ||
+    SLMode:
+      String(value.SLMode ?? value.RiskMode ?? "")
+        .toUpperCase()
+        .includes("DYNAMIC") ||
+      value.SLMode === 1 ||
       value.RiskMode === 1 ||
       value.UseDynamicSLTP === true
         ? "DYNAMIC"
         : "FIXED",
+    TPMode: (() => {
+      const mode = String(value.TPMode ?? "").toUpperCase();
+      if (mode === "TRAILING" || value.TPMode === 2 || value.UseTrailingTP === true) {
+        return "TRAILING";
+      }
+      if (
+        mode === "RISK_1_TO_1" ||
+        mode === "RISK 1:1" ||
+        value.TPMode === 1 ||
+        String(value.RiskMode ?? "").toUpperCase().includes("DYNAMIC") ||
+        value.RiskMode === 1 ||
+        value.UseDynamicSLTP === true
+      ) {
+        return "RISK_1_TO_1";
+      }
+      return "FIXED";
+    })(),
     FixedSLPoint: readString("FixedSLPoint"),
     FixedTPPoint: readString("FixedTPPoint"),
     DynamicLookbackBars: readString("DynamicLookbackBars"),
@@ -451,6 +473,12 @@ const positiveNumber = (label: string) =>
   requiredNumber(label).refine(
     (value) => Number(value) > 0,
     `${label} must be greater than zero.`,
+  );
+
+const nonNegativeNumber = (label: string) =>
+  requiredNumber(label).refine(
+    (value) => Number(value) >= 0,
+    `${label} must be zero or greater.`,
   );
 
 const normalizeTime = (value: string) =>
@@ -487,8 +515,9 @@ const memberConfigSchema = z.object({
   SellMagic: requiredNumber("Sell Magic"),
   SlippagePoints: requiredNumber("Slippage Points"),
   ADXPeriod: positiveNumber("ADX Period"),
-  ADXMinimum: requiredNumber("Minimum ADX"),
-  RiskMode: z.enum(["FIXED", "DYNAMIC"]),
+  ADXMinimum: nonNegativeNumber("Minimum ADX"),
+  SLMode: z.enum(["FIXED", "DYNAMIC"]),
+  TPMode: z.enum(["FIXED", "RISK_1_TO_1", "TRAILING"]),
   FixedSLPoint: positiveNumber("Fixed Stop Loss"),
   FixedTPPoint: positiveNumber("Fixed Take Profit"),
   DynamicLookbackBars: positiveNumber("Dynamic Lookback Bars"),
@@ -588,12 +617,21 @@ const configFieldMeta: Record<
     type: "number",
     step: "0.01",
   },
-  RiskMode: {
-    label: "SL / TP Mode",
+  SLMode: {
+    label: "Stop Loss Mode",
     type: "select",
     options: [
       { label: "Fixed", value: "FIXED" },
-      { label: "Dynamic 1:1", value: "DYNAMIC" },
+      { label: "Dynamic High / Low", value: "DYNAMIC" },
+    ],
+  },
+  TPMode: {
+    label: "Take Profit Mode",
+    type: "select",
+    options: [
+      { label: "Fixed", value: "FIXED" },
+      { label: "Risk 1:1", value: "RISK_1_TO_1" },
+      { label: "Trailing", value: "TRAILING" },
     ],
   },
   FixedSLPoint: {
@@ -660,10 +698,9 @@ const oneShotCoreConfigRows: ConfigFieldName[][] = [
 ];
 
 const oneShotBasicConfigRows: ConfigFieldName[][] = [
-  ["RiskMode"],
+  ["SLMode", "TPMode"],
   ["FixedSLPoint", "FixedTPPoint"],
   ["DynamicLookbackBars"],
-  ["UseTrailingTP"],
   ["TrailingStartPoint", "TrailingStepPoint"],
   ["StartTime", "EndTime"],
   ["EnablePauseTime"],
@@ -920,7 +957,10 @@ export default function MemberHomeDashboard() {
           ...sharedConfiguration,
           ADXPeriod: Number(values.ADXPeriod),
           ADXMinimum: Number(values.ADXMinimum),
-          RiskMode: values.RiskMode,
+          SLMode: values.SLMode,
+          TPMode: values.TPMode,
+          // Keep the legacy flag during rollout for older OneShot binaries.
+          UseTrailingTP: values.TPMode === "TRAILING",
           FixedSLPoint: Number(values.FixedSLPoint),
           FixedTPPoint: Number(values.FixedTPPoint),
           DynamicLookbackBars: Number(values.DynamicLookbackBars),
